@@ -1,0 +1,81 @@
+diff --git a/src/elm/Lia/Markdown/Quiz/Update.elm b/src/elm/Lia/Markdown/Quiz/Update.elm
+index 0c76fe9..228e06b 100644
+--- a/src/elm/Lia/Markdown/Quiz/Update.elm
++++ b/src/elm/Lia/Markdown/Quiz/Update.elm
+@@ -137,6 +137,23 @@ update sync sectionID scripts msg vector =
+ 
+         Handle event ->
+             case Event.destructure event of
++                ( Just "reset", id, ( "reset", _ ) ) ->
++                    (\e ->
++                        Return.val
++                            { e
++                                | state = reset e.state
++                                , solved = Solution.Open
++                                , trial = 0
++                                , hint = 0
++                                , error_msg = ""
++                                , partiallySolved = Array.empty
++                                , deactivated = False
++                            }
++                    )
++                        |> update_ id vector
++                        |> store sectionID
++                        |> doSync sync sectionID (Just id)
++
+                 ( Nothing, _, ( "load", param ) ) ->
+                     param
+                         |> Json.toVector
+diff --git a/src/elm/Lia/Markdown/Quiz/Block/Json.elm b/src/elm/Lia/Markdown/Quiz/Block/Json.elm
+index 1dedf84..f720366 100644
+--- a/src/elm/Lia/Markdown/Quiz/Block/Json.elm
++++ b/src/elm/Lia/Markdown/Quiz/Block/Json.elm
+@@ -42,11 +42,14 @@ fromState state =
+             Select _ _ ->
+                 [ ( "Select", JE.int -1 ) ]
+ 
++            Drop _ _ [] ->
++                [ ( "Drop", JE.int -1 ) ]
++
+             Drop _ _ [ x ] ->
+                 [ ( "Drop", JE.int x ) ]
+ 
+-            Drop _ _ _ ->
+-                [ ( "Drop", JE.int -1 ) ]
++            Drop _ _ values ->
++                [ ( "Drop", JE.list JE.int values ) ]
+ 
+ 
+ toState : JD.Decoder State
+@@ -55,4 +58,19 @@ toState =
+     JD.oneOf
+         [ JD.field "Text" JD.string |> JD.map Text
+         , JD.field "Select" JD.int |> JD.map (List.singleton >> Select False)
++        , JD.field "Drop"
++            (JD.oneOf
++                [ JD.int
++                    |> JD.map
++                        (\value ->
++                            if value < 0 then
++                                []
++
++                            else
++                                [ value ]
++                        )
++                , JD.list JD.int
++                ]
++            )
++            |> JD.map (Drop False False)
+         ]
+diff --git a/src/typescript/liascript/init.ts b/src/typescript/liascript/init.ts
+--- a/src/typescript/liascript/init.ts
++++ b/src/typescript/liascript/init.ts
+@@ -7,6 +7,8 @@ export function initGlobals() {
+     window.LIA = {}
+   }
+ 
++  ;(window.LIA as any).singleQuizResetVersion = 2
++
+   if (!window.LIA.fetch) {
+     injectFetch()
+   }

@@ -1,0 +1,27 @@
+{
+  "name": "lia-resetter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "description": "LiaScript single-quiz reset template with native, lia-kachel, lia-orthography, lia-Mathe, lia-marker, and lia-coordinate examples.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MINT-the-GAP/lia-resetter.git"
+  },
+  "homepage": "https://github.com/MINT-the-GAP/lia-resetter#readme",
+  "bugs": {
+    "url": "https://github.com/MINT-the-GAP/lia-resetter/issues"
+  },
+  "scripts": {
+    "build": "parcel build src/index.ts --dist-dir dist --no-scope-hoist --no-source-maps",
+    "dev": "parcel watch src/index.ts --dist-dir dist --no-scope-hoist",
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "parcel": "^2.16.4",
+    "typescript": "^5.8.3"
+  }
+}
