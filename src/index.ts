@@ -49,15 +49,18 @@ import {
 import {
   installCoordinateReconstructionPrelude,
 } from "./reconstructionPrelude";
+import {
+  RESETTER_ANCHOR_SELECTOR,
+  RESETTER_BUTTON_CLASS,
+  RESETTER_PLACEHOLDER_CLASS,
+  ResetterHostController,
+  type ResetterHostBinding,
+} from "./resetter-host";
 
 const VERSION = "1.0.0";
-const ANCHOR_SELECTOR = "[data-lia-resetter]";
-const BUTTON_CLASS = "lia-resetter__button";
-const PLACEHOLDER_CLASS = "lia-resetter__placeholder";
 const STYLE_ID = "lia-resetter-styles";
 
 const anchorToQuiz = new WeakMap<HTMLElement, HTMLElement>();
-const quizToAnchor = new WeakMap<HTMLElement, HTMLElement>();
 const buttonToQuiz = new WeakMap<HTMLInputElement, HTMLElement>();
 interface QuizLocator {
   readonly scope: HTMLElement;
@@ -154,25 +157,15 @@ function findQuizBefore(anchor: HTMLElement): HTMLElement | undefined {
   return lastQuizBefore(anchor, slide);
 }
 
-function createButton(anchorId: string): HTMLInputElement {
-  const button = document.createElement("input");
-  button.type = "button";
-  button.className = `lia-btn lia-btn--outline ${BUTTON_CLASS}`;
-  button.dataset.liaResetterAnchor = anchorId;
-  button.value = "Reset";
-  button.setAttribute("aria-label", "Dieses Quiz zurücksetzen");
-  return button;
-}
-
 function anchorById(anchorId: string): HTMLElement | undefined {
-  return Array.from(document.querySelectorAll<HTMLElement>(ANCHOR_SELECTOR)).find(
-    (anchor) => anchor.dataset.liaResetterId === anchorId,
-  );
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(RESETTER_ANCHOR_SELECTOR),
+  ).find((anchor) => anchor.dataset.liaResetterId === anchorId);
 }
 
 function purgeLegacyLayoutNodes(): void {
   for (const legacy of document.querySelectorAll<HTMLElement>(
-    `.${BUTTON_CLASS}[data-lia-resetter-portal], .${PLACEHOLDER_CLASS}`,
+    `.${RESETTER_BUTTON_CLASS}, .${RESETTER_PLACEHOLDER_CLASS}`,
   )) {
     legacy.remove();
   }
@@ -249,82 +242,73 @@ function unambiguousMount(locator: QuizLocator): UnambiguousQuizMount {
   return mount;
 }
 
-function bindAnchor(anchor: HTMLElement): void {
-  const quiz = findQuizBefore(anchor);
-  if (!quiz) {
-    return;
-  }
-
-  const oldQuiz = anchorToQuiz.get(anchor);
-  if (oldQuiz && oldQuiz !== quiz) {
-    quizToAnchor.delete(oldQuiz);
-  }
-
-  const otherAnchor = quizToAnchor.get(quiz);
-  if (otherAnchor && otherAnchor !== anchor && otherAnchor.isConnected) {
-    return;
-  }
-
-  anchorToQuiz.set(anchor, quiz);
-  quizToAnchor.set(quiz, anchor);
-
-  const control = quizControl(quiz);
-  if (!control) {
-    return;
+function resetIdForAnchor(anchor: HTMLElement, quiz: HTMLElement): string {
+  const currentId = anchor.dataset.liaResetterId;
+  if (
+    currentId &&
+    (activeResetIds.has(currentId) || pendingResetById.has(currentId))
+  ) {
+    return currentId;
   }
 
   const locator = locatorForQuiz(quiz);
   const anchorId = locator
     ? `section-${locator.sectionId}-quiz-${locator.quizId}`
-    : anchor.dataset.liaResetterId ?? `pending-${++anchorCounter}`;
+    : currentId ?? `pending-${++anchorCounter}`;
   anchor.dataset.liaResetterId = anchorId;
+  return anchorId;
+}
 
-  const resetChildren = Array.from(control.children).filter(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
-      (child.classList.contains(BUTTON_CLASS) ||
-        child.classList.contains(PLACEHOLDER_CLASS)),
-  );
-
-  const existingButton = resetChildren.find(
-    (child): child is HTMLInputElement =>
-      child instanceof HTMLInputElement &&
-      child.type === "button" &&
-      child.dataset.liaResetterAnchor === anchorId,
-  );
-  for (const child of resetChildren) {
-    if (child !== existingButton) child.remove();
-  }
-
-  // lia-kachel freezes native <button> and [role="button"] descendants after
-  // grading. An input[type="button"] remains a native, keyboard-accessible
-  // control without being captured by that broad foreign selector.
-  const button = existingButton ?? createButton(anchorId);
-  if (!existingButton) {
-    // Appending keeps all Elm-managed child indexes unchanged.
-    control.append(button);
-  }
+function onHostBind({
+  anchor,
+  quiz,
+  button,
+  resetId,
+}: ResetterHostBinding): void {
+  anchorToQuiz.set(anchor, quiz);
   buttonToQuiz.set(button, quiz);
+  const locator = locatorForQuiz(quiz);
   if (locator) buttonToLocator.set(button, locator);
-  if (activeResetIds.has(anchorId) || pendingResetById.has(anchorId)) {
+  if (activeResetIds.has(resetId) || pendingResetById.has(resetId)) {
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
     button.value = "Reset ...";
   }
 }
 
+function onHostUnbind({
+  anchor,
+  quiz,
+  button,
+  resetId,
+}: ResetterHostBinding): void {
+  if (anchorToQuiz.get(anchor) === quiz) anchorToQuiz.delete(anchor);
+  if (buttonToQuiz.get(button) === quiz) buttonToQuiz.delete(button);
+  if (!activeResetIds.has(resetId) && !pendingResetById.has(resetId)) {
+    buttonToLocator.delete(button);
+    feedbackGeneration.delete(resetId);
+  }
+}
+
+const hostController = new ResetterHostController({
+  findQuiz: findQuizBefore,
+  resetId: resetIdForAnchor,
+  onBind: onHostBind,
+  onUnbind: onHostUnbind,
+  onReset(button) {
+    void enqueueReset(button).catch(() => undefined);
+  },
+});
+
+function bindAnchor(anchor: HTMLElement): void {
+  hostController.bind(anchor);
+}
+
 function scan(root: ParentNode = document): void {
   installKachelInterop();
   purgeLegacyLayoutNodes();
-  const anchors: HTMLElement[] = [];
-
-  if (root instanceof HTMLElement && root.matches(ANCHOR_SELECTOR)) {
-    anchors.push(root);
-  }
-
-  anchors.push(...Array.from(root.querySelectorAll<HTMLElement>(ANCHOR_SELECTOR)));
-  anchors.forEach(bindAnchor);
-  installKachelCheckCompatibility();
+  hostController.scan(root);
+  installKachelCheckCompatibility((quiz) => hostController.hasQuiz(quiz));
   maintainKachelCompatibilityState(root);
 }
 
@@ -348,18 +332,6 @@ function injectStyles(): void {
     document.head.append(style);
   }
   style.textContent = `
-    ${ANCHOR_SELECTOR} { display: none !important; }
-    .lia-quiz__control > .lia-quiz__check { order: 0; }
-    .lia-quiz__control > .${BUTTON_CLASS} { order: 1; }
-    .lia-quiz__control > .lia-quiz__resolve,
-    .lia-quiz__control > .lia-quiz__hint { order: 2; }
-    .${BUTTON_CLASS} {
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-    }
-    .${BUTTON_CLASS}[aria-busy="true"] { cursor: wait; opacity: .72; }
-    .${BUTTON_CLASS}[data-state="success"] { opacity: .82; }
     .lia-resetter__kachel-feedback { display: none !important; }
   `;
 }
@@ -441,6 +413,9 @@ function expectedVector(
 function quizForButton(button: HTMLInputElement): HTMLElement | undefined {
   const closest = button.closest<HTMLElement>(".lia-quiz");
   if (closest?.isConnected) return closest;
+
+  const managed = hostController.quizForButton(button);
+  if (managed?.isConnected) return managed;
 
   const mapped = buttonToQuiz.get(button);
   if (mapped?.isConnected) return mapped;
@@ -811,11 +786,7 @@ function setButtonState(
 function relatedButtons(button: HTMLInputElement): HTMLInputElement[] {
   const anchorId = button.dataset.liaResetterAnchor;
   const buttons = anchorId
-    ? Array.from(
-        document.querySelectorAll<HTMLInputElement>(
-          `input.${BUTTON_CLASS}[type="button"]`,
-        ),
-      ).filter((current) => current.dataset.liaResetterAnchor === anchorId)
+    ? hostController.buttonsForResetId(anchorId)
     : [];
   if (!buttons.includes(button)) buttons.push(button);
   return buttons;
@@ -861,6 +832,7 @@ async function resetWithFeedback(button: HTMLInputElement): Promise<void> {
     window.setTimeout(() => {
       if (mayExpireFeedback(resetId, generation)) {
         setButtonState(button, "Reset");
+        feedbackGeneration.delete(resetId);
       }
     }, 900);
   } catch (error) {
@@ -872,6 +844,7 @@ async function resetWithFeedback(button: HTMLInputElement): Promise<void> {
       if (mayExpireFeedback(resetId, generation)) {
         setButtonState(button, "Reset");
         setButtonTitle(button);
+        feedbackGeneration.delete(resetId);
       }
     }, 2_500);
     throw error;
@@ -899,27 +872,15 @@ function enqueueReset(button: HTMLInputElement): Promise<void> {
     if (pendingResetById.get(resetId) === result) {
       pendingResetById.delete(resetId);
       setButtonBusy(button, false);
+      if (!button.isConnected) {
+        buttonToQuiz.delete(button);
+        buttonToLocator.delete(button);
+      }
     }
   };
   void result.then(cleanup, cleanup);
   operationQueue = result.catch(() => undefined);
   return result;
-}
-
-function onClick(event: MouseEvent): void {
-  const target = event.target;
-  const button =
-    target instanceof Element
-      ? target.closest<HTMLInputElement>(`.${BUTTON_CLASS}`)
-      : null;
-
-  if (!button || button.type !== "button") {
-    return;
-  }
-
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  void enqueueReset(button).catch(() => undefined);
 }
 
 function mount(root: ParentNode = document): void {
@@ -930,7 +891,6 @@ function mount(root: ParentNode = document): void {
   if (!observer) {
     observer = new MutationObserver(scheduleScan);
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    document.addEventListener("click", onClick, true);
   }
 }
 
@@ -939,17 +899,14 @@ const resetter: ResetterApi = Object.freeze({
   version: VERSION,
   mount,
   reset(trigger: HTMLElement): Promise<void> {
-    let button = trigger.closest<HTMLInputElement>(`.${BUTTON_CLASS}`);
+    let button = trigger.closest<HTMLInputElement>(
+      `.${RESETTER_BUTTON_CLASS}`,
+    );
     if (!button) {
-      const anchor = trigger.closest<HTMLElement>(ANCHOR_SELECTOR);
+      const anchor = trigger.closest<HTMLElement>(RESETTER_ANCHOR_SELECTOR);
       if (anchor) {
         bindAnchor(anchor);
-        const quiz = anchorToQuiz.get(anchor);
-        button = quiz
-          ? quizControl(quiz)?.querySelector<HTMLInputElement>(
-              `input.${BUTTON_CLASS}[type="button"]`,
-            ) ?? null
-          : null;
+        button = hostController.buttonForAnchor(anchor) ?? null;
       }
     }
     return button

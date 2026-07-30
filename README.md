@@ -18,7 +18,7 @@ import: https://raw.githubusercontent.com/MINT-the-GAP/lia-coordinate/Proposal/R
 
 import: https://raw.githubusercontent.com/MINT-the-GAP/lia-DynFlex/refs/heads/main/README.md
 
-@resetter: <span data-lia-resetter aria-hidden="true"></span>
+@resetter: <lia-resetter-host data-lia-resetter></lia-resetter-host>
 
 @Rekonstruktion: @ResetterRekonstruktion_(@uid,`@0`)
 @Reconstruction: @ResetterRekonstruktion_(@uid,`@0`)
@@ -116,6 +116,12 @@ beide grundlegenden Varianten des `lia-marker`-Textmarkerquiz sowie alle
 sieben Quizfamilien von `lia-coordinate` im Branch `Proposal`.
 Die Quizsyntax selbst bleibt unverändert; das unmittelbar folgende
 `@resetter` ergänzt jeweils den vollständigen Einzelreset.
+
+Der Makroaufruf erzeugt dafür einen eigenen Sidecar-Host direkt nach dem Quiz.
+Nur dessen Shadow DOM enthält den Reset-Button; insbesondere wird kein
+Resetter-Knoten in `.lia-quiz__control` oder eine andere von LiaScript/Elm
+verwaltete Kindliste eingefügt. Damit ist der DOM-Patch-Fehler
+`created_by_elm` beim anschließenden Prüfen behoben.
 
 Nach Veröffentlichung des Tags `1.0.0` sollte für stabile Kurse der
 versionsgebundene Import verwendet werden:
@@ -615,7 +621,7 @@ import: https://raw.githubusercontent.com/MINT-the-GAP/lia-marker/main/README.md
 import: https://cdn.jsdelivr.net/gh/LiaTemplates/JSXGraph@main/README.md
 import: https://raw.githubusercontent.com/MINT-the-GAP/lia-coordinate/Proposal/README.md
 
-@resetter: <span data-lia-resetter aria-hidden="true"></span>
+@resetter: <lia-resetter-host data-lia-resetter></lia-resetter-host>
 
 @Resetter.version
 <script modify="false" run-once>

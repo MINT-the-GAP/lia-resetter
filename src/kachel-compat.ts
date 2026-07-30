@@ -77,6 +77,7 @@ const originalInteraction = new WeakMap<
   }
 >();
 let listenerInstalled = false;
+let hasResetterForQuiz = (_quiz: HTMLElement): boolean => false;
 
 function normalize(value: unknown): string {
   const api = kachelApi()?.content;
@@ -660,7 +661,7 @@ function onDocumentClick(event: Event): void {
   const quiz = button.closest<HTMLElement>(".lia-quiz");
   if (
     !quiz ||
-    !quiz.querySelector("input.lia-resetter__button[type=\"button\"]") ||
+    !hasResetterForQuiz(quiz) ||
     !getKachelRoot(quiz)
   ) {
     return;
@@ -684,8 +685,11 @@ function onDocumentClick(event: Event): void {
   }
 }
 
-export function installKachelCheckCompatibility(): void {
+export function installKachelCheckCompatibility(
+  hasResetter?: (quiz: HTMLElement) => boolean,
+): void {
   purgeLegacyFeedbackOverlays();
+  if (hasResetter) hasResetterForQuiz = hasResetter;
   if (listenerInstalled) return;
 
   listenerInstalled = true;

@@ -717,6 +717,7 @@ const $d098096167c97898$var$nativeControlReentry = new WeakSet();
 const $d098096167c97898$var$pendingControls = new WeakSet();
 const $d098096167c97898$var$originalInteraction = new WeakMap();
 let $d098096167c97898$var$listenerInstalled = false;
+let $d098096167c97898$var$hasResetterForQuiz = (_quiz)=>false;
 function $d098096167c97898$var$normalize(value) {
     const api = $d098096167c97898$var$kachelApi()?.content;
     if (typeof api?.normalize === "function") return api.normalize(value);
@@ -1048,7 +1049,7 @@ function $d098096167c97898$var$onDocumentClick(event) {
     }
     if ($d098096167c97898$var$blockPendingClick(event, button)) return;
     const quiz = button.closest(".lia-quiz");
-    if (!quiz || !quiz.querySelector("input.lia-resetter__button[type=\"button\"]") || !(0, $d8d148422a096f50$export$e1405b417718e07)(quiz)) return;
+    if (!quiz || !$d098096167c97898$var$hasResetterForQuiz(quiz) || !(0, $d8d148422a096f50$export$e1405b417718e07)(quiz)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const descriptor = $d098096167c97898$var$descriptorForQuiz(quiz);
@@ -1060,8 +1061,9 @@ function $d098096167c97898$var$onDocumentClick(event) {
     if (button.matches($d098096167c97898$var$PROTECTED_CONTROL_SELECTOR)) $d098096167c97898$var$handleProtectedControl(button, descriptor);
     else $d098096167c97898$var$handleKachelCheck(button, descriptor);
 }
-function $d098096167c97898$export$8ecdb144bfa50eaf() {
+function $d098096167c97898$export$8ecdb144bfa50eaf(hasResetter) {
     $d098096167c97898$var$purgeLegacyFeedbackOverlays();
+    if (hasResetter) $d098096167c97898$var$hasResetterForQuiz = hasResetter;
     if ($d098096167c97898$var$listenerInstalled) return;
     $d098096167c97898$var$listenerInstalled = true;
     window.addEventListener("click", $d098096167c97898$var$onDocumentClick, true);
@@ -3007,13 +3009,199 @@ function $2398ed6574b0de49$export$6d7821f0b1e45314() {
 }
 
 
+const $63cdcaca7b8632ba$export$2fb9ada115c45628 = "[data-lia-resetter]";
+const $63cdcaca7b8632ba$export$6c5f9d8ad473f251 = "lia-resetter__button";
+const $63cdcaca7b8632ba$export$8d8955593cdde8af = "lia-resetter__host";
+const $63cdcaca7b8632ba$export$a608f90c61819219 = "lia-resetter__placeholder";
+const $63cdcaca7b8632ba$var$SHADOW_STYLE_ATTRIBUTE = "data-lia-resetter-shadow-style";
+const $63cdcaca7b8632ba$var$SHADOW_STYLE = `
+  :host {
+    box-sizing: border-box;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    margin: .35rem 0 .75rem;
+  }
+  :host([hidden]) { display: none; }
+  .${$63cdcaca7b8632ba$export$6c5f9d8ad473f251} {
+    appearance: none;
+    box-sizing: border-box;
+    border: 1px solid currentColor;
+    border-radius: .25rem;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.35;
+    padding: .42rem .8rem;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .${$63cdcaca7b8632ba$export$6c5f9d8ad473f251}:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+  .${$63cdcaca7b8632ba$export$6c5f9d8ad473f251}:disabled { cursor: default; opacity: .55; }
+  .${$63cdcaca7b8632ba$export$6c5f9d8ad473f251}[aria-busy="true"] { cursor: wait; opacity: .72; }
+  .${$63cdcaca7b8632ba$export$6c5f9d8ad473f251}[data-state="success"] { opacity: .82; }
+`;
+function $63cdcaca7b8632ba$var$anchorsWithin(root) {
+    const anchors = [];
+    if (root instanceof HTMLElement && root.matches($63cdcaca7b8632ba$export$2fb9ada115c45628)) anchors.push(root);
+    anchors.push(...Array.from(root.querySelectorAll($63cdcaca7b8632ba$export$2fb9ada115c45628)));
+    return anchors;
+}
+function $63cdcaca7b8632ba$var$createButton(resetId) {
+    const button = document.createElement("input");
+    button.type = "button";
+    button.className = `lia-btn lia-btn--outline ${$63cdcaca7b8632ba$export$6c5f9d8ad473f251}`;
+    button.dataset.liaResetterAnchor = resetId;
+    button.value = "Reset";
+    button.setAttribute("aria-label", "Dieses Quiz zur\xfccksetzen");
+    button.setAttribute("part", "button");
+    return button;
+}
+function $63cdcaca7b8632ba$var$ensureShadowButton(anchor, resetId) {
+    // The light-DOM host is authored by @resetter and therefore known to Elm.
+    // Resetter owns only this shadow tree, which is outside Elm's child lists.
+    let root = anchor.shadowRoot;
+    if (!root) try {
+        root = anchor.attachShadow({
+            mode: "open"
+        });
+    } catch  {
+        return undefined;
+    }
+    let style = root.querySelector(`style[${$63cdcaca7b8632ba$var$SHADOW_STYLE_ATTRIBUTE}]`);
+    if (!style) {
+        style = document.createElement("style");
+        style.setAttribute($63cdcaca7b8632ba$var$SHADOW_STYLE_ATTRIBUTE, "");
+        root.prepend(style);
+    }
+    style.textContent = $63cdcaca7b8632ba$var$SHADOW_STYLE;
+    const buttons = Array.from(root.querySelectorAll(`input.${$63cdcaca7b8632ba$export$6c5f9d8ad473f251}[type="button"]`));
+    const button = buttons.shift() ?? $63cdcaca7b8632ba$var$createButton(resetId);
+    for (const duplicate of buttons)duplicate.remove();
+    if (!button.isConnected) root.append(button);
+    button.dataset.liaResetterAnchor = resetId;
+    anchor.dataset.liaResetterId = resetId;
+    anchor.classList.add($63cdcaca7b8632ba$export$8d8955593cdde8af);
+    anchor.removeAttribute("aria-hidden");
+    anchor.removeAttribute("hidden");
+    return button;
+}
+function $63cdcaca7b8632ba$var$deactivateHost(anchor) {
+    for (const button of anchor.shadowRoot?.querySelectorAll(`input.${$63cdcaca7b8632ba$export$6c5f9d8ad473f251}[type="button"]`) ?? [])button.remove();
+    anchor.classList.remove($63cdcaca7b8632ba$export$8d8955593cdde8af);
+    anchor.hidden = true;
+    anchor.setAttribute("aria-hidden", "true");
+}
+class $63cdcaca7b8632ba$export$43b721cd1807b1cc {
+    #bindings;
+    #buttonToBinding;
+    #quizToAnchor;
+    constructor(options){
+        this.options = options;
+        this.#bindings = new Map();
+        this.#buttonToBinding = new WeakMap();
+        this.#quizToAnchor = new Map();
+    }
+    scan(root = document) {
+        this.cleanupDisconnected();
+        for (const anchor of $63cdcaca7b8632ba$var$anchorsWithin(root))this.bind(anchor);
+    }
+    bind(anchor) {
+        this.cleanupDisconnected();
+        if (anchor.closest(".lia-quiz__control")) {
+            this.release(anchor, true);
+            return undefined;
+        }
+        const quiz = this.options.findQuiz(anchor);
+        if (!quiz) {
+            this.release(anchor, true);
+            return undefined;
+        }
+        const otherAnchor = this.#quizToAnchor.get(quiz);
+        if (otherAnchor && otherAnchor !== anchor && otherAnchor.isConnected) {
+            this.release(anchor, true);
+            return undefined;
+        }
+        const resetId = this.options.resetId(anchor, quiz);
+        const button = $63cdcaca7b8632ba$var$ensureShadowButton(anchor, resetId);
+        if (!button) {
+            this.release(anchor, true);
+            return undefined;
+        }
+        const current = this.#bindings.get(anchor);
+        if (current && current.quiz === quiz && current.button === button) {
+            const binding = {
+                ...current,
+                resetId: resetId
+            };
+            this.#bindings.set(anchor, binding);
+            this.#buttonToBinding.set(button, binding);
+            this.#quizToAnchor.set(quiz, anchor);
+            this.options.onBind?.(binding);
+            return button;
+        }
+        if (current) this.releaseBinding(current, current.button !== button);
+        const clickListener = (event)=>{
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            this.options.onReset(button);
+        };
+        button.addEventListener("click", clickListener);
+        const binding = {
+            anchor: anchor,
+            quiz: quiz,
+            button: button,
+            resetId: resetId,
+            clickListener: clickListener
+        };
+        this.#bindings.set(anchor, binding);
+        this.#buttonToBinding.set(button, binding);
+        this.#quizToAnchor.set(quiz, anchor);
+        this.options.onBind?.(binding);
+        return button;
+    }
+    buttonForAnchor(anchor) {
+        return this.#bindings.get(anchor)?.button;
+    }
+    quizForButton(button) {
+        return this.#buttonToBinding.get(button)?.quiz;
+    }
+    hasQuiz(quiz) {
+        const anchor = this.#quizToAnchor.get(quiz);
+        return Boolean(anchor?.isConnected && this.#bindings.has(anchor));
+    }
+    buttonsForResetId(resetId) {
+        return Array.from(this.#bindings.values()).filter((binding)=>binding.resetId === resetId).map((binding)=>binding.button);
+    }
+    cleanupDisconnected() {
+        for (const binding of Array.from(this.#bindings.values()))if (!binding.anchor.isConnected || !binding.quiz.isConnected) this.releaseBinding(binding, binding.anchor.isConnected);
+    }
+    dispose() {
+        for (const binding of Array.from(this.#bindings.values()))this.releaseBinding(binding, true);
+    }
+    release(anchor, removeButton) {
+        const binding = this.#bindings.get(anchor);
+        if (binding) this.releaseBinding(binding, removeButton);
+        else if (removeButton) $63cdcaca7b8632ba$var$deactivateHost(anchor);
+    }
+    releaseBinding(binding, removeButton) {
+        binding.button.removeEventListener("click", binding.clickListener);
+        if (removeButton) $63cdcaca7b8632ba$var$deactivateHost(binding.anchor);
+        if (this.#bindings.get(binding.anchor) === binding) this.#bindings.delete(binding.anchor);
+        this.#buttonToBinding.delete(binding.button);
+        if (this.#quizToAnchor.get(binding.quiz) === binding.anchor) this.#quizToAnchor.delete(binding.quiz);
+        this.options.onUnbind?.(binding);
+    }
+}
+
+
 const $d415641d0cfd8c85$var$VERSION = "1.0.0";
-const $d415641d0cfd8c85$var$ANCHOR_SELECTOR = "[data-lia-resetter]";
-const $d415641d0cfd8c85$var$BUTTON_CLASS = "lia-resetter__button";
-const $d415641d0cfd8c85$var$PLACEHOLDER_CLASS = "lia-resetter__placeholder";
 const $d415641d0cfd8c85$var$STYLE_ID = "lia-resetter-styles";
 const $d415641d0cfd8c85$var$anchorToQuiz = new WeakMap();
-const $d415641d0cfd8c85$var$quizToAnchor = new WeakMap();
 const $d415641d0cfd8c85$var$buttonToQuiz = new WeakMap();
 const $d415641d0cfd8c85$var$buttonToLocator = new WeakMap();
 const $d415641d0cfd8c85$var$activeResetIds = new Set();
@@ -3061,20 +3249,11 @@ function $d415641d0cfd8c85$var$findQuizBefore(anchor) {
     }
     return $d415641d0cfd8c85$var$lastQuizBefore(anchor, slide);
 }
-function $d415641d0cfd8c85$var$createButton(anchorId) {
-    const button = document.createElement("input");
-    button.type = "button";
-    button.className = `lia-btn lia-btn--outline ${$d415641d0cfd8c85$var$BUTTON_CLASS}`;
-    button.dataset.liaResetterAnchor = anchorId;
-    button.value = "Reset";
-    button.setAttribute("aria-label", "Dieses Quiz zur\xfccksetzen");
-    return button;
-}
 function $d415641d0cfd8c85$var$anchorById(anchorId) {
-    return Array.from(document.querySelectorAll($d415641d0cfd8c85$var$ANCHOR_SELECTOR)).find((anchor)=>anchor.dataset.liaResetterId === anchorId);
+    return Array.from(document.querySelectorAll((0, $63cdcaca7b8632ba$export$2fb9ada115c45628))).find((anchor)=>anchor.dataset.liaResetterId === anchorId);
 }
 function $d415641d0cfd8c85$var$purgeLegacyLayoutNodes() {
-    for (const legacy of document.querySelectorAll(`.${$d415641d0cfd8c85$var$BUTTON_CLASS}[data-lia-resetter-portal], .${$d415641d0cfd8c85$var$PLACEHOLDER_CLASS}`))legacy.remove();
+    for (const legacy of document.querySelectorAll(`.${(0, $63cdcaca7b8632ba$export$6c5f9d8ad473f251)}, .${(0, $63cdcaca7b8632ba$export$a608f90c61819219)}`))legacy.remove();
 }
 function $d415641d0cfd8c85$var$locatorForQuiz(quiz) {
     const scope = quiz.closest("main.lia-slide__content");
@@ -3142,45 +3321,50 @@ function $d415641d0cfd8c85$var$unambiguousMount(locator) {
     if (mount.kind === "ambiguous") throw new Error(mount.reason);
     return mount;
 }
-function $d415641d0cfd8c85$var$bindAnchor(anchor) {
-    const quiz = $d415641d0cfd8c85$var$findQuizBefore(anchor);
-    if (!quiz) return;
-    const oldQuiz = $d415641d0cfd8c85$var$anchorToQuiz.get(anchor);
-    if (oldQuiz && oldQuiz !== quiz) $d415641d0cfd8c85$var$quizToAnchor.delete(oldQuiz);
-    const otherAnchor = $d415641d0cfd8c85$var$quizToAnchor.get(quiz);
-    if (otherAnchor && otherAnchor !== anchor && otherAnchor.isConnected) return;
-    $d415641d0cfd8c85$var$anchorToQuiz.set(anchor, quiz);
-    $d415641d0cfd8c85$var$quizToAnchor.set(quiz, anchor);
-    const control = $d415641d0cfd8c85$var$quizControl(quiz);
-    if (!control) return;
+function $d415641d0cfd8c85$var$resetIdForAnchor(anchor, quiz) {
+    const currentId = anchor.dataset.liaResetterId;
+    if (currentId && ($d415641d0cfd8c85$var$activeResetIds.has(currentId) || $d415641d0cfd8c85$var$pendingResetById.has(currentId))) return currentId;
     const locator = $d415641d0cfd8c85$var$locatorForQuiz(quiz);
-    const anchorId = locator ? `section-${locator.sectionId}-quiz-${locator.quizId}` : anchor.dataset.liaResetterId ?? `pending-${++$d415641d0cfd8c85$var$anchorCounter}`;
+    const anchorId = locator ? `section-${locator.sectionId}-quiz-${locator.quizId}` : currentId ?? `pending-${++$d415641d0cfd8c85$var$anchorCounter}`;
     anchor.dataset.liaResetterId = anchorId;
-    const resetChildren = Array.from(control.children).filter((child)=>child instanceof HTMLElement && (child.classList.contains($d415641d0cfd8c85$var$BUTTON_CLASS) || child.classList.contains($d415641d0cfd8c85$var$PLACEHOLDER_CLASS)));
-    const existingButton = resetChildren.find((child)=>child instanceof HTMLInputElement && child.type === "button" && child.dataset.liaResetterAnchor === anchorId);
-    for (const child of resetChildren)if (child !== existingButton) child.remove();
-    // lia-kachel freezes native <button> and [role="button"] descendants after
-    // grading. An input[type="button"] remains a native, keyboard-accessible
-    // control without being captured by that broad foreign selector.
-    const button = existingButton ?? $d415641d0cfd8c85$var$createButton(anchorId);
-    if (!existingButton) // Appending keeps all Elm-managed child indexes unchanged.
-    control.append(button);
+    return anchorId;
+}
+function $d415641d0cfd8c85$var$onHostBind({ anchor: anchor, quiz: quiz, button: button, resetId: resetId }) {
+    $d415641d0cfd8c85$var$anchorToQuiz.set(anchor, quiz);
     $d415641d0cfd8c85$var$buttonToQuiz.set(button, quiz);
+    const locator = $d415641d0cfd8c85$var$locatorForQuiz(quiz);
     if (locator) $d415641d0cfd8c85$var$buttonToLocator.set(button, locator);
-    if ($d415641d0cfd8c85$var$activeResetIds.has(anchorId) || $d415641d0cfd8c85$var$pendingResetById.has(anchorId)) {
+    if ($d415641d0cfd8c85$var$activeResetIds.has(resetId) || $d415641d0cfd8c85$var$pendingResetById.has(resetId)) {
         button.disabled = true;
         button.setAttribute("aria-busy", "true");
         button.value = "Reset ...";
     }
 }
+function $d415641d0cfd8c85$var$onHostUnbind({ anchor: anchor, quiz: quiz, button: button, resetId: resetId }) {
+    if ($d415641d0cfd8c85$var$anchorToQuiz.get(anchor) === quiz) $d415641d0cfd8c85$var$anchorToQuiz.delete(anchor);
+    if ($d415641d0cfd8c85$var$buttonToQuiz.get(button) === quiz) $d415641d0cfd8c85$var$buttonToQuiz.delete(button);
+    if (!$d415641d0cfd8c85$var$activeResetIds.has(resetId) && !$d415641d0cfd8c85$var$pendingResetById.has(resetId)) {
+        $d415641d0cfd8c85$var$buttonToLocator.delete(button);
+        $d415641d0cfd8c85$var$feedbackGeneration.delete(resetId);
+    }
+}
+const $d415641d0cfd8c85$var$hostController = new (0, $63cdcaca7b8632ba$export$43b721cd1807b1cc)({
+    findQuiz: $d415641d0cfd8c85$var$findQuizBefore,
+    resetId: $d415641d0cfd8c85$var$resetIdForAnchor,
+    onBind: $d415641d0cfd8c85$var$onHostBind,
+    onUnbind: $d415641d0cfd8c85$var$onHostUnbind,
+    onReset (button) {
+        $d415641d0cfd8c85$var$enqueueReset(button).catch(()=>undefined);
+    }
+});
+function $d415641d0cfd8c85$var$bindAnchor(anchor) {
+    $d415641d0cfd8c85$var$hostController.bind(anchor);
+}
 function $d415641d0cfd8c85$var$scan(root = document) {
     (0, $d8d148422a096f50$export$44be1ab85c8c4e24)();
     $d415641d0cfd8c85$var$purgeLegacyLayoutNodes();
-    const anchors = [];
-    if (root instanceof HTMLElement && root.matches($d415641d0cfd8c85$var$ANCHOR_SELECTOR)) anchors.push(root);
-    anchors.push(...Array.from(root.querySelectorAll($d415641d0cfd8c85$var$ANCHOR_SELECTOR)));
-    anchors.forEach($d415641d0cfd8c85$var$bindAnchor);
-    (0, $d098096167c97898$export$8ecdb144bfa50eaf)();
+    $d415641d0cfd8c85$var$hostController.scan(root);
+    (0, $d098096167c97898$export$8ecdb144bfa50eaf)((quiz)=>$d415641d0cfd8c85$var$hostController.hasQuiz(quiz));
     (0, $d098096167c97898$export$d99d05dcb51a6f0b)(root);
 }
 function $d415641d0cfd8c85$var$scheduleScan() {
@@ -3199,18 +3383,6 @@ function $d415641d0cfd8c85$var$injectStyles() {
         document.head.append(style);
     }
     style.textContent = `
-    ${$d415641d0cfd8c85$var$ANCHOR_SELECTOR} { display: none !important; }
-    .lia-quiz__control > .lia-quiz__check { order: 0; }
-    .lia-quiz__control > .${$d415641d0cfd8c85$var$BUTTON_CLASS} { order: 1; }
-    .lia-quiz__control > .lia-quiz__resolve,
-    .lia-quiz__control > .lia-quiz__hint { order: 2; }
-    .${$d415641d0cfd8c85$var$BUTTON_CLASS} {
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-    }
-    .${$d415641d0cfd8c85$var$BUTTON_CLASS}[aria-busy="true"] { cursor: wait; opacity: .72; }
-    .${$d415641d0cfd8c85$var$BUTTON_CLASS}[data-state="success"] { opacity: .82; }
     .lia-resetter__kachel-feedback { display: none !important; }
   `;
 }
@@ -3285,6 +3457,8 @@ function $d415641d0cfd8c85$var$expectedVector(before, quizId) {
 function $d415641d0cfd8c85$var$quizForButton(button) {
     const closest = button.closest(".lia-quiz");
     if (closest?.isConnected) return closest;
+    const managed = $d415641d0cfd8c85$var$hostController.quizForButton(button);
+    if (managed?.isConnected) return managed;
     const mapped = $d415641d0cfd8c85$var$buttonToQuiz.get(button);
     if (mapped?.isConnected) return mapped;
     const located = $d415641d0cfd8c85$var$buttonToLocator.get(button);
@@ -3469,7 +3643,7 @@ function $d415641d0cfd8c85$var$setButtonState(button, text, state) {
 }
 function $d415641d0cfd8c85$var$relatedButtons(button) {
     const anchorId = button.dataset.liaResetterAnchor;
-    const buttons = anchorId ? Array.from(document.querySelectorAll(`input.${$d415641d0cfd8c85$var$BUTTON_CLASS}[type="button"]`)).filter((current)=>current.dataset.liaResetterAnchor === anchorId) : [];
+    const buttons = anchorId ? $d415641d0cfd8c85$var$hostController.buttonsForResetId(anchorId) : [];
     if (!buttons.includes(button)) buttons.push(button);
     return buttons;
 }
@@ -3500,7 +3674,10 @@ async function $d415641d0cfd8c85$var$resetWithFeedback(button) {
         $d415641d0cfd8c85$var$setButtonTitle(button);
         $d415641d0cfd8c85$var$setButtonState(button, "Zur\xfcckgesetzt", "success");
         window.setTimeout(()=>{
-            if ($d415641d0cfd8c85$var$mayExpireFeedback(resetId, generation)) $d415641d0cfd8c85$var$setButtonState(button, "Reset");
+            if ($d415641d0cfd8c85$var$mayExpireFeedback(resetId, generation)) {
+                $d415641d0cfd8c85$var$setButtonState(button, "Reset");
+                $d415641d0cfd8c85$var$feedbackGeneration.delete(resetId);
+            }
         }, 900);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -3511,6 +3688,7 @@ async function $d415641d0cfd8c85$var$resetWithFeedback(button) {
             if ($d415641d0cfd8c85$var$mayExpireFeedback(resetId, generation)) {
                 $d415641d0cfd8c85$var$setButtonState(button, "Reset");
                 $d415641d0cfd8c85$var$setButtonTitle(button);
+                $d415641d0cfd8c85$var$feedbackGeneration.delete(resetId);
             }
         }, 2500);
         throw error;
@@ -3532,19 +3710,15 @@ function $d415641d0cfd8c85$var$enqueueReset(button) {
         if ($d415641d0cfd8c85$var$pendingResetById.get(resetId) === result) {
             $d415641d0cfd8c85$var$pendingResetById.delete(resetId);
             $d415641d0cfd8c85$var$setButtonBusy(button, false);
+            if (!button.isConnected) {
+                $d415641d0cfd8c85$var$buttonToQuiz.delete(button);
+                $d415641d0cfd8c85$var$buttonToLocator.delete(button);
+            }
         }
     };
     result.then(cleanup, cleanup);
     $d415641d0cfd8c85$var$operationQueue = result.catch(()=>undefined);
     return result;
-}
-function $d415641d0cfd8c85$var$onClick(event) {
-    const target = event.target;
-    const button = target instanceof Element ? target.closest(`.${$d415641d0cfd8c85$var$BUTTON_CLASS}`) : null;
-    if (!button || button.type !== "button") return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    $d415641d0cfd8c85$var$enqueueReset(button).catch(()=>undefined);
 }
 function $d415641d0cfd8c85$var$mount(root = document) {
     (0, $d8d148422a096f50$export$44be1ab85c8c4e24)();
@@ -3556,7 +3730,6 @@ function $d415641d0cfd8c85$var$mount(root = document) {
             childList: true,
             subtree: true
         });
-        document.addEventListener("click", $d415641d0cfd8c85$var$onClick, true);
     }
 }
 const $d415641d0cfd8c85$var$resetter = Object.freeze({
@@ -3564,13 +3737,12 @@ const $d415641d0cfd8c85$var$resetter = Object.freeze({
     version: $d415641d0cfd8c85$var$VERSION,
     mount: $d415641d0cfd8c85$var$mount,
     reset (trigger) {
-        let button = trigger.closest(`.${$d415641d0cfd8c85$var$BUTTON_CLASS}`);
+        let button = trigger.closest(`.${(0, $63cdcaca7b8632ba$export$6c5f9d8ad473f251)}`);
         if (!button) {
-            const anchor = trigger.closest($d415641d0cfd8c85$var$ANCHOR_SELECTOR);
+            const anchor = trigger.closest((0, $63cdcaca7b8632ba$export$2fb9ada115c45628));
             if (anchor) {
                 $d415641d0cfd8c85$var$bindAnchor(anchor);
-                const quiz = $d415641d0cfd8c85$var$anchorToQuiz.get(anchor);
-                button = quiz ? $d415641d0cfd8c85$var$quizControl(quiz)?.querySelector(`input.${$d415641d0cfd8c85$var$BUTTON_CLASS}[type="button"]`) ?? null : null;
+                button = $d415641d0cfd8c85$var$hostController.buttonForAnchor(anchor) ?? null;
             }
         }
         return button ? $d415641d0cfd8c85$var$enqueueReset(button) : Promise.reject(new Error("Kein Resetter-Button gefunden."));
@@ -3581,3 +3753,5 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
     once: true
 });
 else $d415641d0cfd8c85$var$mount();
+
+

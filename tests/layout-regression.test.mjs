@@ -3,17 +3,28 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+const hostSource = readFileSync(
+  new URL("../src/resetter-host.ts", import.meta.url),
+  "utf8",
+);
 const kachelCompat = readFileSync(
   new URL("../src/kachel-compat.ts", import.meta.url),
   "utf8",
 );
 const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 
-test("uses one in-flow native control without fixed portal positioning", () => {
-  assert.match(source, /document\.createElement\("input"\)/);
-  assert.match(source, /button\.type = "button"/);
-  assert.match(source, /control\.append\(button\)/);
-  assert.match(source, /document\.addEventListener\("click", onClick, true\)/);
+test("keeps Resetter content across the Elm ownership boundary", () => {
+  assert.match(
+    readme,
+    /@resetter: <lia-resetter-host data-lia-resetter><\/lia-resetter-host>/,
+  );
+  assert.match(hostSource, /anchor\.attachShadow\(\{ mode: "open" \}\)/);
+  assert.match(hostSource, /root\.append\(button\)/);
+  assert.match(hostSource, /anchor\.closest\("\.lia-quiz__control"\)/);
+  assert.match(hostSource, /button\.addEventListener\("click", clickListener\)/);
+  assert.doesNotMatch(source, /control\.append\(button\)/);
+  assert.doesNotMatch(source, /\.lia-quiz__control > \.lia-resetter__button/);
+  assert.doesNotMatch(source, /document\.addEventListener\("click", onClick/);
   assert.doesNotMatch(source, /function schedulePortalLayout/);
   assert.doesNotMatch(source, /position:\s*fixed/);
   assert.doesNotMatch(source, /addEventListener\("scroll"/);
@@ -80,11 +91,15 @@ test("keeps the stock-core flex demo free of Drop siblings", () => {
   assert.doesNotMatch(flexSection, /\[->\[/);
 });
 
-test("activates Kachel compatibility through the inline reset control", () => {
-  assert.ok(
-    kachelCompat.includes(
-      'input.lia-resetter__button[type=\\"button\\"]',
-    ),
+test("activates Kachel compatibility through the explicit host mapping", () => {
+  assert.match(
+    source,
+    /installKachelCheckCompatibility\(\(quiz\) => hostController\.hasQuiz\(quiz\)\)/,
+  );
+  assert.match(kachelCompat, /!hasResetterForQuiz\(quiz\)/);
+  assert.doesNotMatch(
+    kachelCompat,
+    /quiz\.querySelector\("input\.lia-resetter__button/,
   );
   assert.doesNotMatch(kachelCompat, /lia-resetter__placeholder/);
 });
