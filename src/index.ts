@@ -44,8 +44,12 @@ import {
 } from "./marker";
 import {
   captureCoordinateContext,
+  captureCoordinateMacroStateForQuiz,
   resetCoordinateContext,
+  setCoordinateMacroCaptureBlocked,
+  validateCoordinateResetConfigurationForQuiz,
 } from "./coordinate";
+import type { CoordinateMacroState } from "./coordinate-macro-state.ts";
 import {
   installCoordinateReconstructionPrelude,
 } from "./reconstructionPrelude";
@@ -79,6 +83,9 @@ const buttonToLocator = new WeakMap<HTMLInputElement, QuizLocator>();
 const activeResetIds = new Set<string>();
 const feedbackGeneration = new Map<string, number>();
 const pendingResetById = new Map<string, Promise<void>>();
+const coordinateMacroStateByResetId = new Map<string, CoordinateMacroState>();
+const coordinateCaptureRetryByResetId = new Map<string, number>();
+const coordinateCaptureNotBeforeByResetId = new Map<string, number>();
 let anchorCounter = 0;
 let observer: MutationObserver | undefined;
 let scanScheduled = false;
@@ -259,6 +266,50 @@ function resetIdForAnchor(anchor: HTMLElement, quiz: HTMLElement): string {
   return anchorId;
 }
 
+function clearCoordinateCaptureRetry(resetId: string): void {
+  const timer = coordinateCaptureRetryByResetId.get(resetId);
+  if (timer !== undefined) window.clearTimeout(timer);
+  coordinateCaptureRetryByResetId.delete(resetId);
+}
+
+function scheduleCoordinateCaptureRetry(
+  resetId: string,
+  button: HTMLInputElement,
+): void {
+  if (coordinateCaptureRetryByResetId.has(resetId)) return;
+  const timer = window.setTimeout(() => {
+    coordinateCaptureRetryByResetId.delete(resetId);
+    if (button.isConnected) scheduleScan();
+  }, 160);
+  coordinateCaptureRetryByResetId.set(resetId, timer);
+}
+
+function setCoordinateCapturePending(
+  button: HTMLInputElement,
+  message: string,
+  permanent: boolean,
+): void {
+  button.dataset.liaCoordinateCapturePending = "true";
+  button.disabled = true;
+  button.setAttribute("aria-disabled", "true");
+  button.title = message;
+  button.value = permanent ? "Reset nicht verfügbar" : "Reset wird vorbereitet …";
+}
+
+function releaseCoordinateCapturePending(
+  button: HTMLInputElement,
+  resetId: string,
+): void {
+  if (button.dataset.liaCoordinateCapturePending !== "true") return;
+  delete button.dataset.liaCoordinateCapturePending;
+  button.removeAttribute("aria-disabled");
+  button.removeAttribute("title");
+  if (!activeResetIds.has(resetId) && !pendingResetById.has(resetId)) {
+    button.disabled = false;
+    button.value = "Reset";
+  }
+}
+
 function onHostBind({
   anchor,
   quiz,
@@ -269,6 +320,66 @@ function onHostBind({
   buttonToQuiz.set(button, quiz);
   const locator = locatorForQuiz(quiz);
   if (locator) buttonToLocator.set(button, locator);
+  const scope = quiz.closest<HTMLElement>("main.lia-slide__content");
+  if (scope) {
+    try {
+      let isCoordinate = false;
+      if (!coordinateMacroStateByResetId.has(resetId)) {
+        isCoordinate = validateCoordinateResetConfigurationForQuiz(quiz, scope);
+        if (isCoordinate) {
+          const now = Date.now();
+          const notBefore = coordinateCaptureNotBeforeByResetId.get(resetId);
+          if (notBefore === undefined) {
+            coordinateCaptureNotBeforeByResetId.set(resetId, now + 260);
+            setCoordinateMacroCaptureBlocked(quiz, scope, true);
+            setCoordinateCapturePending(
+              button,
+              "Der Coordinate-Makrozustand wird vollständig aufgebaut.",
+              false,
+            );
+            scheduleCoordinateCaptureRetry(resetId, button);
+          } else if (now < notBefore) {
+            setCoordinateMacroCaptureBlocked(quiz, scope, true);
+            setCoordinateCapturePending(
+              button,
+              "Der Coordinate-Makrozustand wird vollständig aufgebaut.",
+              false,
+            );
+            scheduleCoordinateCaptureRetry(resetId, button);
+          } else {
+            const macroState = captureCoordinateMacroStateForQuiz(quiz, scope);
+            if (macroState) {
+              coordinateMacroStateByResetId.set(resetId, macroState);
+              coordinateCaptureNotBeforeByResetId.delete(resetId);
+            }
+          }
+        }
+      } else {
+        isCoordinate = validateCoordinateResetConfigurationForQuiz(quiz, scope);
+      }
+      if (isCoordinate && coordinateMacroStateByResetId.has(resetId)) {
+        setCoordinateMacroCaptureBlocked(quiz, scope, false);
+        clearCoordinateCaptureRetry(resetId);
+        releaseCoordinateCapturePending(button, resetId);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const permanent = message.includes("genau ein Quiz pro Board-ID");
+      if (permanent) {
+        try {
+          setCoordinateMacroCaptureBlocked(quiz, scope, false);
+        } catch {
+          // Keep the original configuration error visible on the button.
+        }
+      }
+      setCoordinateCapturePending(button, message, permanent);
+      if (permanent) {
+        coordinateCaptureNotBeforeByResetId.delete(resetId);
+        clearCoordinateCaptureRetry(resetId);
+      }
+      else scheduleCoordinateCaptureRetry(resetId, button);
+    }
+  }
   if (activeResetIds.has(resetId) || pendingResetById.has(resetId)) {
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
@@ -282,11 +393,23 @@ function onHostUnbind({
   button,
   resetId,
 }: ResetterHostBinding): void {
+  const scope = quiz.closest<HTMLElement>("main.lia-slide__content");
+  if (scope) {
+    try {
+      setCoordinateMacroCaptureBlocked(quiz, scope, false);
+    } catch {
+      // A disconnected Coordinate board has no remaining interaction to free.
+    }
+  }
   if (anchorToQuiz.get(anchor) === quiz) anchorToQuiz.delete(anchor);
   if (buttonToQuiz.get(button) === quiz) buttonToQuiz.delete(button);
   if (!activeResetIds.has(resetId) && !pendingResetById.has(resetId)) {
     buttonToLocator.delete(button);
     feedbackGeneration.delete(resetId);
+  }
+  if (!button.isConnected) {
+    coordinateCaptureNotBeforeByResetId.delete(resetId);
+    clearCoordinateCaptureRetry(resetId);
   }
 }
 
@@ -485,7 +608,15 @@ async function performReset(button: HTMLInputElement): Promise<void> {
   const orthographyContext = captureOrthographyContext(quiz, scope);
   const matheContext = captureMatheContext(quiz, scope);
   const markerContext = captureMarkerContext(quiz, scope);
-  const coordinateContext = captureCoordinateContext(quiz, scope);
+  const coordinateResetId = button.dataset.liaResetterAnchor;
+  const coordinateMacroState = coordinateResetId
+    ? coordinateMacroStateByResetId.get(coordinateResetId)
+    : undefined;
+  const coordinateContext = captureCoordinateContext(
+    quiz,
+    scope,
+    coordinateMacroState,
+  );
   const sectionId = readSectionId(quiz);
   const quizzes = nativeQuizzes(scope);
   const nativeReset = await supportsLosslessNativeReset(sectionId);

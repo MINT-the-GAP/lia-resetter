@@ -197,6 +197,14 @@ import: https://raw.githubusercontent.com/MINT-the-GAP/lia-coordinate/main/READM
 Auch hier darf nur einer der beiden Coordinate-Branches importiert werden,
 weil beide dieselben Makronamen definieren.
 
+Der Resetter erfasst den Zustand jedes Coordinate-Boards einmalig direkt nach
+dem Makroaufbau. Ein Reset stellt anschließend nicht nur das LiaScript-Quiz,
+sondern auch Boardausschnitt und -größe, Makropunkte und -graphen, DGS-
+Konstruktionen, Schar- und Reglerwerte sowie die zugehörigen Coordinate-
+Register auf diesen Ausgangszustand zurück. Damit der Ausgangszustand
+eindeutig bleibt, darf innerhalb eines Abschnitts nur ein zurücksetzbares
+Coordinate-Quiz dieselbe Board-ID verwenden.
+
 Mit einem unveränderten LiaScript-Core müssen Drop-/Kachelquizze und andere
 Quiztypen in getrennten `##`-Abschnitten stehen, wenn beide einzeln
 zurücksetzbar sein sollen. Für gemischte Quizvektoren liegt unter
@@ -473,9 +481,9 @@ zusätzliche Quizart.
 
 ## 18. Punkt erzeugen
 
-`@CreatePoint` erzeugt einen verschiebbaren Punkt. Nach dem Reset werden der
-quiz-eigene Punkt, seine Sperre und seine persistierte Coordinate-Referenz
-entfernt; das Koordinatensystem selbst bleibt erhalten.
+`@CreatePoint` erzeugt einen verschiebbaren Punkt. Der Reset stellt das
+gesamte Board einschließlich Ausschnitt, Makroobjekten und persistierten
+Coordinate-Referenzen auf den ursprünglichen Makrozustand zurück.
 
 @CoordinateSystem(`xmin=-5;xmax=5;ymin=-4;ymax=4;width=;id=reset_coord_create`)
 
@@ -490,8 +498,8 @@ Ziehe den Punkt $A$ auf die Koordinaten $(2|3)$.
 ## 19. Punkt auf einem Graphen
 
 `@PointOnGraph` prüft einen verschiebbaren Punkt gegen einen Funktionsgraphen.
-Der Einzelreset entfernt genau diesen Punkt und den eingeblendeten
-Lösungsgraphen, ohne andere Objekte des Boards anzutasten.
+Der Einzelreset entfernt Lernzustand und Lösungsgraph und baut anschließend
+den ursprünglichen Makrozustand des Boards wieder auf.
 
 @CoordinateSystem(`xmin=-5;xmax=5;ymin=-4;ymax=4;width=;id=reset-coordinate-graph`)
 
@@ -505,9 +513,9 @@ Ziehe den Punkt $B$ auf den Graphen $f(x)=2x-1$.
 
 ## 20. Mehrere Punkte auf einem Graphen
 
-`@PointsOnGraph` verlangt mehrere Punkte auf demselben Graphen. Alle vom
-Quiz erzeugten Punkte und nur dessen exakter Lösungsgraph werden gemeinsam
-zurückgesetzt.
+`@PointsOnGraph` verlangt mehrere Punkte auf demselben Graphen. Alle
+Quizpunkte, der Lösungsgraph und das Board werden gemeinsam auf den beim
+Makroaufbau erfassten Ausgangszustand zurückgesetzt.
 
 @CoordinateSystem(`xmin=-5;xmax=5;ymin=-4;ymax=4;width=;id=reset_coord_multi`)
 
@@ -522,11 +530,10 @@ Ziehe alle drei Punkte auf den Graphen $g(x)=x-1$.
 ## 21. Funktionsrekonstruktion
 
 `@Rekonstruktion` vergleicht eine eingestellte Funktion mit dem Zielterm.
-Der Reset öffnet nur das Quiz erneut. Die Reglerstellung bleibt als
-eigenständiger, möglicherweise geteilter Lernzustand absichtlich erhalten.
-Vor jeder Prüfung wird ausschließlich das vorherige LiaScript-Skriptergebnis
-dieses Quiz geleert. Dadurch werden auch eine unverändert falsche oder richtige
-Einstellung nach dem Reset erneut normal ausgewertet und inline rückgemeldet.
+Der Reset öffnet das Quiz erneut und stellt Schar, Regler, Funktionsgraph und
+Boardausschnitt auf die beim Makroaufbau erfassten Werte zurück. Das vorherige
+LiaScript-Skriptergebnis wird ebenfalls geleert, sodass die Aufgabe wieder
+vollständig im Ausgangszustand vorliegt.
 
 @CoordinateSystem(`xmin=-7;xmax=7;ymin=-5;ymax=5;width=;id=reset_coord_reconstruction`)
 
@@ -543,8 +550,8 @@ Stelle die Funktion $f(x)=2x-1$ ein.
 ## 22. Umfangsquiz (`Proposal`)
 
 `@UmfangQuiz` prüft den Umfang eines selbst konstruierten Polygons. Der
-Polygonzustand bleibt beim Einzelreset erhalten, damit dasselbe Board auch
-von anderen Aufgaben ausgewertet werden kann.
+Einzelreset verwirft die Lernkonstruktion und stellt den ursprünglichen
+DGS- und Boardzustand des Makros wieder her.
 
 @CoordinateSystem(`xmin=-1;xmax=6;ymin=-1;ymax=5;width=;id=reset_coord_perimeter`)
 
@@ -559,7 +566,8 @@ Konstruiere ein Dreieck mit dem Umfang $12$.
 ## 23. Flächenquiz (`Proposal`)
 
 `@FlaecheQuiz` prüft den Flächeninhalt eines selbst konstruierten Polygons.
-Auch hier setzt der Button nur das zugehörige LiaScript-Ergebnis zurück.
+Der Button setzt Quiz, Lernkonstruktion und Koordinatensystem gemeinsam auf
+den ursprünglichen Makrozustand zurück.
 
 @CoordinateSystem(`xmin=-1;xmax=6;ymin=-1;ymax=5;width=;id=reset_coord_area`)
 
@@ -574,7 +582,8 @@ Konstruiere ein Dreieck mit dem Flächeninhalt $6$.
 ## 24. Konstruktionsquiz (`Proposal`)
 
 `@KonstruktionQuiz` prüft geometrische Eigenschaften und ihre Reihenfolge.
-Die Konstruktion bleibt erhalten; der native Quizstatus wird isoliert geöffnet.
+Der Reset entfernt die Lernkonstruktion, öffnet den nativen Quizstatus und
+stellt das Coordinate-Board auf den ursprünglichen Makrozustand zurück.
 
 @CoordinateSystem(`xmin=-1;xmax=7;ymin=-1;ymax=5;width=;id=reset_coord_construction`)
 
@@ -982,9 +991,9 @@ zusätzliche Quizart.
 
 ---
 
-`@CreatePoint` erzeugt einen verschiebbaren Punkt. Nach dem Reset werden der
-quiz-eigene Punkt, seine Sperre und seine persistierte Coordinate-Referenz
-entfernt; das Koordinatensystem selbst bleibt erhalten.
+`@CreatePoint` erzeugt einen verschiebbaren Punkt. Der Reset stellt das
+gesamte Board einschließlich Ausschnitt, Makroobjekten und persistierten
+Coordinate-Referenzen auf den ursprünglichen Makrozustand zurück.
 
 @CoordinateSystem(`xmin=-5;xmax=5;ymin=-4;ymax=4;width=;id=reset_coord_create`)
 
@@ -1003,8 +1012,8 @@ Ziehe den Punkt $A$ auf die Koordinaten $(2|3)$.
 ---
 
 `@PointOnGraph` prüft einen verschiebbaren Punkt gegen einen Funktionsgraphen.
-Der Einzelreset entfernt genau diesen Punkt und den eingeblendeten
-Lösungsgraphen, ohne andere Objekte des Boards anzutasten.
+Der Einzelreset entfernt Lernzustand und Lösungsgraph und baut anschließend
+den ursprünglichen Makrozustand des Boards wieder auf.
 
 @CoordinateSystem(`xmin=-5;xmax=5;ymin=-4;ymax=4;width=;id=reset-coordinate-graph`)
 
@@ -1022,9 +1031,9 @@ Ziehe den Punkt $B$ auf den Graphen $f(x)=2x-1$.
 
 ---
 
-`@PointsOnGraph` verlangt mehrere Punkte auf demselben Graphen. Alle vom
-Quiz erzeugten Punkte und nur dessen exakter Lösungsgraph werden gemeinsam
-zurückgesetzt.
+`@PointsOnGraph` verlangt mehrere Punkte auf demselben Graphen. Alle
+Quizpunkte, der Lösungsgraph und das Board werden gemeinsam auf den beim
+Makroaufbau erfassten Ausgangszustand zurückgesetzt.
 
 @CoordinateSystem(`xmin=-5;xmax=5;ymin=-4;ymax=4;width=;id=reset_coord_multi`)
 
@@ -1043,11 +1052,10 @@ Ziehe alle drei Punkte auf den Graphen $g(x)=x-1$.
 ---
 
 `@Rekonstruktion` vergleicht eine eingestellte Funktion mit dem Zielterm.
-Der Reset öffnet nur das Quiz erneut. Die Reglerstellung bleibt als
-eigenständiger, möglicherweise geteilter Lernzustand absichtlich erhalten.
-Vor jeder Prüfung wird ausschließlich das vorherige LiaScript-Skriptergebnis
-dieses Quiz geleert. Dadurch werden auch eine unverändert falsche oder richtige
-Einstellung nach dem Reset erneut normal ausgewertet und inline rückgemeldet.
+Der Reset öffnet das Quiz erneut und stellt Schar, Regler, Funktionsgraph und
+Boardausschnitt auf die beim Makroaufbau erfassten Werte zurück. Das vorherige
+LiaScript-Skriptergebnis wird ebenfalls geleert, sodass die Aufgabe wieder
+vollständig im Ausgangszustand vorliegt.
 
 @CoordinateSystem(`xmin=-7;xmax=7;ymin=-5;ymax=5;width=;id=reset_coord_reconstruction`)
 
@@ -1068,8 +1076,8 @@ Stelle die Funktion $f(x)=2x-1$ ein.
 ---
 
 `@UmfangQuiz` prüft den Umfang eines selbst konstruierten Polygons. Der
-Polygonzustand bleibt beim Einzelreset erhalten, damit dasselbe Board auch
-von anderen Aufgaben ausgewertet werden kann.
+Einzelreset verwirft die Lernkonstruktion und stellt den ursprünglichen
+DGS- und Boardzustand des Makros wieder her.
 
 @CoordinateSystem(`xmin=-1;xmax=6;ymin=-1;ymax=5;width=;id=reset_coord_perimeter`)
 
@@ -1088,7 +1096,8 @@ Konstruiere ein Dreieck mit dem Umfang $12$.
 ---
 
 `@FlaecheQuiz` prüft den Flächeninhalt eines selbst konstruierten Polygons.
-Auch hier setzt der Button nur das zugehörige LiaScript-Ergebnis zurück.
+Der Button setzt Quiz, Lernkonstruktion und Koordinatensystem gemeinsam auf
+den ursprünglichen Makrozustand zurück.
 
 @CoordinateSystem(`xmin=-1;xmax=6;ymin=-1;ymax=5;width=;id=reset_coord_area`)
 
@@ -1107,7 +1116,8 @@ Konstruiere ein Dreieck mit dem Flächeninhalt $6$.
 ---
 
 `@KonstruktionQuiz` prüft geometrische Eigenschaften und ihre Reihenfolge.
-Die Konstruktion bleibt erhalten; der native Quizstatus wird isoliert geöffnet.
+Der Reset entfernt die Lernkonstruktion, öffnet den nativen Quizstatus und
+stellt das Coordinate-Board auf den ursprünglichen Makrozustand zurück.
 
 @CoordinateSystem(`xmin=-1;xmax=7;ymin=-1;ymax=5;width=;id=reset_coord_construction`)
 

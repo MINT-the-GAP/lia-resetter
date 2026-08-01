@@ -2115,8 +2115,1127 @@ async function $e918c11cf6e47267$export$a4f3373b6ba73de3(context, quiz) {
 }
 
 
+function $e8fdc675c2832d65$var$isRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function $e8fdc675c2832d65$var$hasOwn(value, key) {
+    return Object.prototype.hasOwnProperty.call(value, key);
+}
+function $e8fdc675c2832d65$var$finite(value) {
+    const result = Number(value);
+    return Number.isFinite(result) ? result : undefined;
+}
+function $e8fdc675c2832d65$var$validBoundingBox(value) {
+    if (!Array.isArray(value) || value.length !== 4) return undefined;
+    const result = value.map($e8fdc675c2832d65$var$finite);
+    if (result.some((entry)=>entry === undefined) || result[2] <= result[0] || result[1] <= result[3]) return undefined;
+    return result;
+}
+function $e8fdc675c2832d65$var$cloneJson(value) {
+    try {
+        const serialized = JSON.stringify(value);
+        return serialized === undefined ? undefined : JSON.parse(serialized);
+    } catch  {
+        return undefined;
+    }
+}
+function $e8fdc675c2832d65$var$cloneRecord(value) {
+    const cloned = $e8fdc675c2832d65$var$cloneJson(value);
+    return $e8fdc675c2832d65$var$isRecord(cloned) ? cloned : {};
+}
+function $e8fdc675c2832d65$var$recordStore(globals, key) {
+    const current = globals[key];
+    if ($e8fdc675c2832d65$var$isRecord(current)) return current;
+    const created = {};
+    globals[key] = created;
+    return created;
+}
+function $e8fdc675c2832d65$var$method(container, key) {
+    const value = container?.[key];
+    return typeof value === "function" ? value : undefined;
+}
+function $e8fdc675c2832d65$var$call(receiver, key, args = []) {
+    const callback = $e8fdc675c2832d65$var$method(receiver, key);
+    return callback ? Reflect.apply(callback, receiver, args) : undefined;
+}
+function $e8fdc675c2832d65$var$withRestoreFlag(globals, callback) {
+    const key = "__liaFreezeCoordinateRestoreActive";
+    const existed = $e8fdc675c2832d65$var$hasOwn(globals, key);
+    const previous = globals[key];
+    globals[key] = true;
+    try {
+        return callback();
+    } finally{
+        if (existed) globals[key] = previous;
+        else delete globals[key];
+    }
+}
+function $e8fdc675c2832d65$var$coordinateApi(globals) {
+    return $e8fdc675c2832d65$var$isRecord(globals.__coord) ? globals.__coord : undefined;
+}
+function $e8fdc675c2832d65$var$boardStateStore(globals) {
+    const api = $e8fdc675c2832d65$var$coordinateApi(globals);
+    const fromApi = $e8fdc675c2832d65$var$call(api, "getBoardStateStore");
+    if ($e8fdc675c2832d65$var$isRecord(fromApi)) return fromApi;
+    return $e8fdc675c2832d65$var$recordStore(globals, "__coordBoardStates");
+}
+function $e8fdc675c2832d65$var$boardSize(container, dimension) {
+    if (!container) return undefined;
+    const offset = dimension === "width" ? $e8fdc675c2832d65$var$finite(container.offsetWidth) : $e8fdc675c2832d65$var$finite(container.offsetHeight);
+    if (offset !== undefined && offset > 0) return Math.round(offset);
+    const style = container.style;
+    const inline = style && $e8fdc675c2832d65$var$finite(style[dimension]);
+    if (inline !== undefined && inline > 0) return Math.round(inline);
+    try {
+        const rect = container.getBoundingClientRect?.();
+        const measured = rect && $e8fdc675c2832d65$var$finite(rect[dimension]);
+        return measured !== undefined && measured > 0 ? Math.round(measured) : undefined;
+    } catch  {
+        return undefined;
+    }
+}
+function $e8fdc675c2832d65$var$liveBoardState(runtime, boardId) {
+    const stored = $e8fdc675c2832d65$var$cloneRecord($e8fdc675c2832d65$var$boardStateStore(runtime.globals)[boardId]);
+    let bbox;
+    try {
+        bbox = $e8fdc675c2832d65$var$validBoundingBox(runtime.board.getBoundingBox?.());
+    } catch  {
+        bbox = undefined;
+    }
+    bbox ??= $e8fdc675c2832d65$var$validBoundingBox(stored.bbox);
+    if (!bbox) throw new Error("Der Makro-Viewport des lia-coordinate-Boards ist nicht lesbar.");
+    stored.bbox = bbox;
+    const exportBBox = $e8fdc675c2832d65$var$validBoundingBox(runtime.board.__coordExportBBox) ?? bbox;
+    stored.exportBBox = exportBBox;
+    const width = $e8fdc675c2832d65$var$boardSize(runtime.board.containerObj, "width");
+    const height = $e8fdc675c2832d65$var$boardSize(runtime.board.containerObj, "height");
+    if (width !== undefined) stored.width = width;
+    if (height !== undefined) stored.height = height;
+    const sizeMode = String(runtime.board.__coordSizeMode ?? stored.sizeMode ?? "auto");
+    stored.sizeMode = [
+        "auto",
+        "capped",
+        "manual"
+    ].includes(sizeMode) ? sizeMode : "auto";
+    const maximum = $e8fdc675c2832d65$var$finite(runtime.board.__coordMaxStartWidth ?? stored.maxStartWidth);
+    stored.maxStartWidth = maximum !== undefined && maximum > 0 ? maximum : null;
+    stored.manualSize = stored.sizeMode === "manual";
+    const zoomMode = String(runtime.board.__liaDgsZoomMode ?? stored.zoomMode ?? "");
+    if ([
+        "both",
+        "vertical",
+        "horizontal"
+    ].includes(zoomMode)) stored.zoomMode = zoomMode;
+    const axisScaleMode = String(runtime.board.__liaDgsAxisScaleMode ?? stored.axisScaleMode ?? "");
+    if ([
+        "cartesian",
+        "log-x",
+        "log-y",
+        "log-log"
+    ].includes(axisScaleMode)) stored.axisScaleMode = axisScaleMode;
+    return stored;
+}
+function $e8fdc675c2832d65$var$scopedBucket(globals, storeName, boardId) {
+    const store = $e8fdc675c2832d65$var$isRecord(globals[storeName]) ? globals[storeName] : undefined;
+    return $e8fdc675c2832d65$var$cloneRecord(store?.[boardId]);
+}
+function $e8fdc675c2832d65$var$pointPosition(value) {
+    if (!$e8fdc675c2832d65$var$isRecord(value)) return undefined;
+    try {
+        const readX = $e8fdc675c2832d65$var$method(value, "X");
+        const readY = $e8fdc675c2832d65$var$method(value, "Y");
+        const x = readX ? $e8fdc675c2832d65$var$finite(Reflect.apply(readX, value, [])) : undefined;
+        const y = readY ? $e8fdc675c2832d65$var$finite(Reflect.apply(readY, value, [])) : undefined;
+        return x !== undefined && y !== undefined ? {
+            x: x,
+            y: y
+        } : undefined;
+    } catch  {
+        return undefined;
+    }
+}
+function $e8fdc675c2832d65$var$liveScharStates(globals, boardId) {
+    const result = {};
+    const store = $e8fdc675c2832d65$var$isRecord(globals.__liaScharStateStore) ? globals.__liaScharStateStore : undefined;
+    for (const [key, value] of Object.entries(store ?? {})){
+        if (!key.endsWith(`::${boardId}`)) continue;
+        const cloned = $e8fdc675c2832d65$var$cloneJson(value);
+        if (cloned !== undefined) result[key] = cloned;
+    }
+    const entries = $e8fdc675c2832d65$var$isRecord(globals.__scharEntries) ? globals.__scharEntries : undefined;
+    for (const value of Object.values(entries ?? {})){
+        if (!$e8fdc675c2832d65$var$isRecord(value) || String(value.boardId ?? "") !== boardId) continue;
+        const uid = String(value.uid ?? "").trim();
+        if (!uid) continue;
+        const live = $e8fdc675c2832d65$var$cloneRecord({
+            values: value.values,
+            panelScale: $e8fdc675c2832d65$var$finite(value.panelScale) ?? 0.55,
+            panelMinimized: value.panelMinimized === true,
+            termVisible: value.termVisible === true
+        });
+        result[`${uid}::${boardId}`] = live;
+    }
+    return result;
+}
+const $e8fdc675c2832d65$var$REGRESSION_ANALYSIS_GROUPS = [
+    [
+        "analysisEntries",
+        "linear"
+    ],
+    [
+        "quadraticAnalysisEntries",
+        "quadratic"
+    ],
+    [
+        "cubicAnalysisEntries",
+        "cubic"
+    ],
+    [
+        "quarticAnalysisEntries",
+        "quartic"
+    ],
+    [
+        "sinAnalysisEntries",
+        "sin"
+    ],
+    [
+        "expAnalysisEntries",
+        "exp"
+    ],
+    [
+        "logAnalysisEntries",
+        "log"
+    ],
+    [
+        "sqrtAnalysisEntries",
+        "sqrt"
+    ],
+    [
+        "hyperbolaAnalysisEntries",
+        "hyperbola"
+    ],
+    [
+        "hyperbola2AnalysisEntries",
+        "hyperbola2"
+    ]
+];
+function $e8fdc675c2832d65$var$regressionPointData(value) {
+    if (!$e8fdc675c2832d65$var$isRecord(value)) return undefined;
+    const key = String(value.key ?? "").trim();
+    let x = $e8fdc675c2832d65$var$finite(value.x);
+    let y = $e8fdc675c2832d65$var$finite(value.y);
+    if (x === undefined || y === undefined) {
+        const point = $e8fdc675c2832d65$var$pointPosition($e8fdc675c2832d65$var$isRecord(value.point) ? value.point : value);
+        x ??= point?.x;
+        y ??= point?.y;
+    }
+    return key && x !== undefined && y !== undefined ? $e8fdc675c2832d65$var$cloneRecord({
+        key: key,
+        x: x,
+        y: y
+    }) : undefined;
+}
+function $e8fdc675c2832d65$var$regressionPointList(value) {
+    if (!Array.isArray(value)) return [];
+    const result = [];
+    for (const point of value){
+        const projected = $e8fdc675c2832d65$var$regressionPointData(point);
+        if (!projected) throw new Error("Ein Regression-Punkt ist nicht sicher kopierbar.");
+        result.push(projected);
+    }
+    return result;
+}
+function $e8fdc675c2832d65$var$regressionPanelScale(panel) {
+    if (!$e8fdc675c2832d65$var$isRecord(panel)) return 0.55;
+    const style = $e8fdc675c2832d65$var$isRecord(panel.style) ? panel.style : undefined;
+    const transform = String(style?.transform ?? "");
+    const parsed = /scale\(([-+0-9.eE]+)\)/.exec(transform);
+    return $e8fdc675c2832d65$var$finite(parsed?.[1]) ?? 0.55;
+}
+function $e8fdc675c2832d65$var$regressionPanelMinimized(panel) {
+    if (!$e8fdc675c2832d65$var$isRecord(panel)) return false;
+    try {
+        const query = $e8fdc675c2832d65$var$method(panel, "querySelector");
+        const mini = query ? Reflect.apply(query, panel, [
+            ".lia-plot-analysis-mini-wrap"
+        ]) : undefined;
+        if (!$e8fdc675c2832d65$var$isRecord(mini)) return false;
+        const style = $e8fdc675c2832d65$var$isRecord(mini.style) ? mini.style : undefined;
+        return String(style?.display ?? "").toLowerCase() !== "none";
+    } catch  {
+        return false;
+    }
+}
+function $e8fdc675c2832d65$var$liveRegressionAnalyses(state) {
+    const result = [];
+    let fallbackOrder = 0;
+    for (const [listName, fallbackClass] of $e8fdc675c2832d65$var$REGRESSION_ANALYSIS_GROUPS){
+        const entries = Array.isArray(state[listName]) ? state[listName] : [];
+        for (const value of entries){
+            if (!$e8fdc675c2832d65$var$isRecord(value)) throw new Error("Eine Regression-Analyse ist nicht sicher kopierbar.");
+            fallbackOrder += 1;
+            const parsedOrder = $e8fdc675c2832d65$var$finite(String(value.id ?? "").split("-").pop());
+            const model = $e8fdc675c2832d65$var$cloneJson(value.model ?? {});
+            const probabilities = $e8fdc675c2832d65$var$cloneJson(value.classProbabilities);
+            const linkedModels = $e8fdc675c2832d65$var$cloneJson(value.linkedModels);
+            if (model === undefined) throw new Error("Ein Regression-Modell ist nicht sicher kopierbar.");
+            result.push($e8fdc675c2832d65$var$cloneRecord({
+                id: String(value.id ?? ""),
+                classKey: String(value.classKey ?? fallbackClass),
+                title: String(value.title ?? ""),
+                color: String(value.color ?? state.drawColor ?? "#ff0000"),
+                model: model,
+                ...probabilities !== undefined ? {
+                    classProbabilities: probabilities
+                } : {},
+                ...linkedModels !== undefined ? {
+                    linkedModels: linkedModels
+                } : {},
+                overlayScale: $e8fdc675c2832d65$var$regressionPanelScale(value.panel),
+                minimized: $e8fdc675c2832d65$var$regressionPanelMinimized(value.panel),
+                order: parsedOrder ?? fallbackOrder
+            }));
+        }
+    }
+    return result.sort((left, right)=>Number(left.order ?? 0) - Number(right.order ?? 0));
+}
+function $e8fdc675c2832d65$var$regressionSnapshotFromLive(state, boardId, stored) {
+    const previous = $e8fdc675c2832d65$var$isRecord(stored) ? stored : undefined;
+    const drawingHistory = $e8fdc675c2832d65$var$cloneJson({
+        strokes: state.strokes ?? [],
+        undoActions: state.undoActions ?? [],
+        redoActions: state.redoActions ?? []
+    });
+    if (drawingHistory === undefined) throw new Error("Die Regression-Zeichenhistorie ist nicht sicher kopierbar.");
+    return $e8fdc675c2832d65$var$cloneRecord({
+        revision: $e8fdc675c2832d65$var$finite(previous?.revision) ?? $e8fdc675c2832d65$var$finite(state.restoredSnapshotRevision) ?? 0,
+        boardId: boardId,
+        drawColor: String(state.drawColor ?? "#ff0000"),
+        drawColorMenuOpen: state.drawColorMenuOpen === true,
+        toolsMenuOpen: state.toolsMenuOpen === true,
+        activeTool: String(state.activeTool ?? ""),
+        regressionMode: String(state.regressionMode ?? ""),
+        drawingHistory: drawingHistory,
+        regressionPoints: $e8fdc675c2832d65$var$regressionPointList(state.regressionPoints),
+        autoCreatedPointsData: $e8fdc675c2832d65$var$regressionPointList(state.autoCreatedPointsData),
+        analysisSeq: Math.max(0, $e8fdc675c2832d65$var$finite(state.analysisSeq) ?? 0),
+        analyses: $e8fdc675c2832d65$var$liveRegressionAnalyses(state)
+    });
+}
+function $e8fdc675c2832d65$var$liveRegressionSnapshots(runtime, boardId) {
+    const result = {};
+    const { globals: globals } = runtime;
+    const snapshots = $e8fdc675c2832d65$var$isRecord(globals.__liaRegressionSnapshots) ? globals.__liaRegressionSnapshots : undefined;
+    for (const [key, value] of Object.entries(snapshots ?? {})){
+        const snapshot = $e8fdc675c2832d65$var$isRecord(value) ? value : undefined;
+        if (key !== `board:${boardId}` && String(snapshot?.boardId ?? "") !== boardId) continue;
+        const cloned = $e8fdc675c2832d65$var$cloneJson(value);
+        if (cloned !== undefined) result[key] = cloned;
+    }
+    const states = $e8fdc675c2832d65$var$isRecord(globals.__liaRegressionStates) ? globals.__liaRegressionStates : undefined;
+    for (const value of Object.values(states ?? {})){
+        if (!$e8fdc675c2832d65$var$isRecord(value) || String(value.boardId ?? "") !== boardId || value.board !== runtime.board) continue;
+        const key = `board:${boardId}`;
+        result[key] = $e8fdc675c2832d65$var$regressionSnapshotFromLive(value, boardId, result[key]);
+        break;
+    }
+    return result;
+}
+function $e8fdc675c2832d65$var$liveRegressionUids(runtime, boardId) {
+    const states = $e8fdc675c2832d65$var$isRecord(runtime.globals.__liaRegressionStates) ? runtime.globals.__liaRegressionStates : undefined;
+    return Object.entries(states ?? {}).filter(([, value])=>$e8fdc675c2832d65$var$isRecord(value) && String(value.boardId ?? "") === boardId && value.board === runtime.board).map(([uid])=>uid).sort();
+}
+function $e8fdc675c2832d65$var$tableValues(value) {
+    const source = $e8fdc675c2832d65$var$isRecord(value) && Array.isArray(value.values) ? value.values : Array.isArray(value) ? value : [];
+    return source.map((entry)=>{
+        const cell = $e8fdc675c2832d65$var$isRecord(entry) ? entry : {};
+        return {
+            x: String(cell.x ?? ""),
+            y: String(cell.y ?? "")
+        };
+    });
+}
+function $e8fdc675c2832d65$var$liveTableStates(runtime, boardId) {
+    const result = {};
+    const states = $e8fdc675c2832d65$var$isRecord(runtime.globals.__tableStates) ? runtime.globals.__tableStates : undefined;
+    for (const [uid, value] of Object.entries(states ?? {})){
+        if (!$e8fdc675c2832d65$var$isRecord(value) || String(value.boardId ?? "") !== boardId) continue;
+        let data = value;
+        try {
+            data = $e8fdc675c2832d65$var$call(runtime.globals, "getTableData", [
+                uid
+            ]) ?? value;
+        } catch  {
+            data = value;
+        }
+        result[uid] = {
+            uid: uid,
+            boardId: boardId,
+            values: $e8fdc675c2832d65$var$tableValues(data),
+            cellWidths: $e8fdc675c2832d65$var$cloneRecord(value.cellWidths)
+        };
+    }
+    return result;
+}
+function $e8fdc675c2832d65$var$livePlotInputStates(runtime, boardId) {
+    const result = {};
+    const states = $e8fdc675c2832d65$var$isRecord(runtime.globals.__plotInputStates) ? runtime.globals.__plotInputStates : undefined;
+    for (const [uid, value] of Object.entries(states ?? {})){
+        if (!$e8fdc675c2832d65$var$isRecord(value) || String(value.boardId ?? "") !== boardId) continue;
+        result[uid] = {
+            uid: uid,
+            boardId: boardId,
+            raw: String(value.raw ?? ""),
+            plotted: Boolean(value.graph) && (!$e8fdc675c2832d65$var$isRecord(value.graph) || value.graph.board === runtime.board)
+        };
+    }
+    return result;
+}
+function $e8fdc675c2832d65$var$liveSliderStates(runtime, boardId) {
+    const result = {};
+    const entries = $e8fdc675c2832d65$var$isRecord(runtime.globals.__sliderEntries) ? runtime.globals.__sliderEntries : undefined;
+    for (const [key, value] of Object.entries(entries ?? {})){
+        if (!$e8fdc675c2832d65$var$isRecord(value) || String(value.boardId ?? "") !== boardId) continue;
+        const slider = $e8fdc675c2832d65$var$isRecord(value.slider) ? value.slider : undefined;
+        if (!slider || slider.board !== runtime.board || slider.__liaDgsSliderDeleted === true) continue;
+        const readValue = $e8fdc675c2832d65$var$method(slider, "Value");
+        let current;
+        try {
+            current = readValue ? $e8fdc675c2832d65$var$finite(Reflect.apply(readValue, slider, [])) : $e8fdc675c2832d65$var$finite(slider.__liaDgsSliderValue);
+        } catch  {
+            current = undefined;
+        }
+        const uid = String(value.uid ?? "").trim();
+        const name = String(value.name ?? "").trim();
+        if (current === undefined || !uid || !name) continue;
+        const first = $e8fdc675c2832d65$var$pointPosition(slider.point1);
+        const second = $e8fdc675c2832d65$var$pointPosition(slider.point2);
+        result[key] = {
+            uid: uid,
+            boardId: boardId,
+            name: name,
+            value: current,
+            ...first && second ? {
+                points: [
+                    first,
+                    second
+                ]
+            } : {}
+        };
+    }
+    return result;
+}
+function $e8fdc675c2832d65$var$flushDgs(runtime, boardId) {
+    try {
+        $e8fdc675c2832d65$var$call(runtime.globals, "__persistDgsBoardState", [
+            boardId,
+            false
+        ]);
+    } catch  {
+    // A board without @DGS legitimately has no persistence controller.
+    }
+}
+function $e8fdc675c2832d65$var$readMacroState(runtime, boardId) {
+    $e8fdc675c2832d65$var$flushDgs(runtime, boardId);
+    const dgsStore = $e8fdc675c2832d65$var$isRecord(runtime.globals.__dgsConstructionStates) ? runtime.globals.__dgsConstructionStates : undefined;
+    const hadDgsSnapshot = Boolean(dgsStore && $e8fdc675c2832d65$var$hasOwn(dgsStore, boardId));
+    const dgsSnapshot = hadDgsSnapshot ? $e8fdc675c2832d65$var$cloneJson(dgsStore?.[boardId]) : undefined;
+    if (hadDgsSnapshot && dgsSnapshot === undefined) throw new Error("Der DGS-Makrozustand ist nicht sicher kopierbar.");
+    const dgsBoards = $e8fdc675c2832d65$var$isRecord(runtime.globals.__dgsConstructionBoards) ? runtime.globals.__dgsConstructionBoards : undefined;
+    if (hadDgsSnapshot && dgsBoards?.[boardId] !== runtime.board) throw new Error("Der DGS-Controller des Coordinate-Boards ist noch nicht bereit.");
+    return Object.freeze({
+        boardId: boardId,
+        boardState: $e8fdc675c2832d65$var$liveBoardState(runtime, boardId),
+        pointStates: $e8fdc675c2832d65$var$scopedBucket(runtime.globals, "__pointStates", boardId),
+        pointGraphStates: $e8fdc675c2832d65$var$scopedBucket(runtime.globals, "__pointGraphStates", boardId),
+        hadDgsSnapshot: hadDgsSnapshot,
+        ...dgsSnapshot !== undefined ? {
+            dgsSnapshot: dgsSnapshot
+        } : {},
+        scharStates: $e8fdc675c2832d65$var$liveScharStates(runtime.globals, boardId),
+        regressionSnapshots: $e8fdc675c2832d65$var$liveRegressionSnapshots(runtime, boardId),
+        regressionUids: $e8fdc675c2832d65$var$liveRegressionUids(runtime, boardId),
+        sliderStates: $e8fdc675c2832d65$var$liveSliderStates(runtime, boardId),
+        tableStates: $e8fdc675c2832d65$var$liveTableStates(runtime, boardId),
+        plotInputStates: $e8fdc675c2832d65$var$livePlotInputStates(runtime, boardId)
+    });
+}
+function $e8fdc675c2832d65$export$da3df4c9ca93b4c9(runtime, boardId, requirements = {}) {
+    const state = $e8fdc675c2832d65$var$readMacroState(runtime, boardId);
+    if (requirements.requireDgs && !state.hadDgsSnapshot) throw new Error("Der DGS-Makrozustand ist noch nicht bereit.");
+    if (requirements.requireSchar && Object.keys(state.scharStates).length === 0) throw new Error("Der Schar-Makrozustand ist noch nicht bereit.");
+    if (requirements.requireRegression && state.regressionUids.length === 0) throw new Error("Der Regression-Makrozustand ist noch nicht bereit.");
+    const missingSchar = (requirements.scharUids ?? []).filter((uid)=>{
+        if (!$e8fdc675c2832d65$var$hasOwn(state.scharStates, `${uid}::${boardId}`)) return true;
+        const entries = $e8fdc675c2832d65$var$isRecord(runtime.globals.__scharEntries) ? runtime.globals.__scharEntries : undefined;
+        return !Object.values(entries ?? {}).some((value)=>$e8fdc675c2832d65$var$isRecord(value) && String(value.uid ?? "") === uid && String(value.boardId ?? "") === boardId && value.board === runtime.board);
+    });
+    if (missingSchar.length > 0) throw new Error("Der Schar-Makrozustand ist noch nicht vollst\xe4ndig bereit.");
+    const sliderUids = new Set(Object.values(state.sliderStates).map((entry)=>entry.uid));
+    if ((requirements.sliderUids ?? []).some((uid)=>!sliderUids.has(uid))) throw new Error("Der Slider-Makrozustand ist noch nicht vollst\xe4ndig bereit.");
+    if ((requirements.tableUids ?? []).some((uid)=>!$e8fdc675c2832d65$var$hasOwn(state.tableStates, uid))) throw new Error("Der Tabellen-Makrozustand ist noch nicht vollst\xe4ndig bereit.");
+    if ((requirements.plotInputUids ?? []).some((uid)=>!$e8fdc675c2832d65$var$hasOwn(state.plotInputStates, uid))) throw new Error("Der PlotInput-Makrozustand ist noch nicht vollst\xe4ndig bereit.");
+    if ((requirements.pointNames ?? []).some((name)=>!$e8fdc675c2832d65$var$hasOwn(state.pointStates, name))) throw new Error("Der Punkt-Makrozustand ist noch nicht vollst\xe4ndig bereit.");
+    if ((requirements.dgsMacroKeys ?? []).length > 0) {
+        const snapshot = $e8fdc675c2832d65$var$isRecord(state.dgsSnapshot) ? state.dgsSnapshot : undefined;
+        const records = Array.isArray(snapshot?.records) ? snapshot.records : [];
+        const keys = new Set(records.flatMap((record)=>$e8fdc675c2832d65$var$isRecord(record) ? [
+                String(record.id ?? ""),
+                String(record.macroKey ?? "")
+            ] : []));
+        if ((requirements.dgsMacroKeys ?? []).some((key)=>!keys.has(key))) throw new Error("Der authored DGS-Makrozustand ist noch nicht vollst\xe4ndig bereit.");
+        if ((requirements.dgsMacroKeyPrefixes ?? []).some((prefix)=>!Array.from(keys).some((key)=>key.startsWith(prefix)))) throw new Error("Die authored DGS-Makroobjekte sind noch nicht vollst\xe4ndig bereit.");
+    } else if ((requirements.dgsMacroKeyPrefixes ?? []).length > 0) {
+        const snapshot = $e8fdc675c2832d65$var$isRecord(state.dgsSnapshot) ? state.dgsSnapshot : undefined;
+        const records = Array.isArray(snapshot?.records) ? snapshot.records : [];
+        const keys = records.flatMap((record)=>$e8fdc675c2832d65$var$isRecord(record) ? [
+                String(record.id ?? ""),
+                String(record.macroKey ?? "")
+            ] : []);
+        if ((requirements.dgsMacroKeyPrefixes ?? []).some((prefix)=>!keys.some((key)=>key.startsWith(prefix)))) throw new Error("Die authored DGS-Makroobjekte sind noch nicht vollst\xe4ndig bereit.");
+    }
+    return state;
+}
+function $e8fdc675c2832d65$var$replaceBoardBucket(globals, storeName, boardId, value) {
+    $e8fdc675c2832d65$var$recordStore(globals, storeName)[boardId] = $e8fdc675c2832d65$var$cloneRecord(value);
+}
+function $e8fdc675c2832d65$var$replaceScopedStore(globals, storeName, belongsToBoard, replacement) {
+    const store = $e8fdc675c2832d65$var$recordStore(globals, storeName);
+    for (const [key, value] of Object.entries(store))if (belongsToBoard(key, value)) delete store[key];
+    for (const [key, value] of Object.entries(replacement)){
+        const cloned = $e8fdc675c2832d65$var$cloneJson(value);
+        if (cloned !== undefined) store[key] = cloned;
+    }
+}
+function $e8fdc675c2832d65$var$seedMacroStores(runtime, state) {
+    const { globals: globals } = runtime;
+    const boardStore = $e8fdc675c2832d65$var$boardStateStore(globals);
+    boardStore[state.boardId] = $e8fdc675c2832d65$var$cloneRecord(state.boardState);
+    if ($e8fdc675c2832d65$var$isRecord(globals.__coordBoardStates) && globals.__coordBoardStates !== boardStore) globals.__coordBoardStates[state.boardId] = $e8fdc675c2832d65$var$cloneRecord(state.boardState);
+    $e8fdc675c2832d65$var$replaceBoardBucket(globals, "__pointStates", state.boardId, state.pointStates);
+    $e8fdc675c2832d65$var$replaceBoardBucket(globals, "__pointGraphStates", state.boardId, state.pointGraphStates);
+    $e8fdc675c2832d65$var$replaceScopedStore(globals, "__liaScharStateStore", (key)=>key.endsWith(`::${state.boardId}`), state.scharStates);
+    $e8fdc675c2832d65$var$replaceScopedStore(globals, "__liaRegressionSnapshots", (key, value)=>key === `board:${state.boardId}` || $e8fdc675c2832d65$var$isRecord(value) && String(value.boardId ?? "") === state.boardId, state.regressionSnapshots);
+}
+function $e8fdc675c2832d65$var$restoreBoard(runtime, state) {
+    const sizeMode = String(state.boardState.sizeMode ?? "auto");
+    const bbox = (sizeMode === "manual" ? $e8fdc675c2832d65$var$validBoundingBox(state.boardState.bbox) : $e8fdc675c2832d65$var$validBoundingBox(state.boardState.exportBBox)) ?? $e8fdc675c2832d65$var$validBoundingBox(state.boardState.bbox) ?? $e8fdc675c2832d65$var$validBoundingBox(state.boardState.exportBBox);
+    if (!bbox) throw new Error("Der gespeicherte Coordinate-Viewport ist ung\xfcltig.");
+    const width = $e8fdc675c2832d65$var$finite(state.boardState.width);
+    const height = $e8fdc675c2832d65$var$finite(state.boardState.height);
+    runtime.board.__restoreLockUntil = Date.now() + 800;
+    runtime.board.__coordSizeMode = sizeMode;
+    runtime.board.__coordMaxStartWidth = state.boardState.maxStartWidth;
+    runtime.board.__manualWidth = sizeMode === "manual" ? width ?? null : null;
+    runtime.board.__manualHeight = sizeMode === "manual" ? height ?? null : null;
+    runtime.board.__coordExportBBox = ($e8fdc675c2832d65$var$validBoundingBox(state.boardState.exportBBox) ?? bbox).slice();
+    if (width !== undefined && height !== undefined && width > 0 && height > 0) try {
+        runtime.board.resizeContainer?.(width, height, false, true);
+    } catch  {
+    // The upstream restore helper still restores the viewport below.
+    }
+    const api = $e8fdc675c2832d65$var$coordinateApi(runtime.globals);
+    try {
+        if ($e8fdc675c2832d65$var$method(api, "restoreSavedBoardState")) $e8fdc675c2832d65$var$call(api, "restoreSavedBoardState", [
+            runtime.board,
+            bbox.slice(),
+            state.boardId
+        ]);
+        else runtime.board.setBoundingBox?.(bbox.slice(), true);
+    } catch  {
+        runtime.board.setBoundingBox?.(bbox.slice(), true);
+    }
+    runtime.board.setBoundingBox?.(bbox.slice(), true);
+    runtime.board.update?.();
+    // Bounding-box and resize handlers persist asynchronously. Keep their
+    // source of truth on the immutable macro state as well as on the live board.
+    $e8fdc675c2832d65$var$boardStateStore(runtime.globals)[state.boardId] = $e8fdc675c2832d65$var$cloneRecord(state.boardState);
+}
+function $e8fdc675c2832d65$var$firstSpecValue(spec) {
+    let value = String(spec ?? "").trim();
+    if (value.length >= 2 && (value.startsWith("`") && value.endsWith("`") || value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1).trim();
+    let first = String(value.split(";")[0] ?? "").trim().replace(/^id\s*=\s*/i, "").trim();
+    if (first.length >= 2 && (first.startsWith("`") && first.endsWith("`") || first.startsWith("'") && first.endsWith("'") || first.charCodeAt(0) === 34 && first.charCodeAt(first.length - 1) === 34)) first = first.slice(1, -1).trim();
+    return first;
+}
+function $e8fdc675c2832d65$var$dgsSpecElements(runtime, boardId) {
+    try {
+        return Array.from(runtime.view.document?.querySelectorAll("[id^='dgs-ui-'][data-spec]") ?? []).filter((node)=>$e8fdc675c2832d65$var$firstSpecValue(node.dataset.spec) === boardId);
+    } catch  {
+        return [];
+    }
+}
+function $e8fdc675c2832d65$var$clickElement(value) {
+    if (!$e8fdc675c2832d65$var$isRecord(value)) return false;
+    const click = $e8fdc675c2832d65$var$method(value, "click");
+    if (!click) return false;
+    Reflect.apply(click, value, []);
+    return true;
+}
+function $e8fdc675c2832d65$var$elementDataMode(value) {
+    return $e8fdc675c2832d65$var$isRecord(value) && $e8fdc675c2832d65$var$isRecord(value.dataset) ? String(value.dataset.mode ?? "") : "";
+}
+function $e8fdc675c2832d65$var$restoreDgsViewModes(runtime, state) {
+    const zoomMode = String(state.boardState.zoomMode ?? "");
+    const zoomModes = [
+        "both",
+        "vertical",
+        "horizontal"
+    ];
+    if (zoomModes.includes(zoomMode)) {
+        const container = runtime.board.containerObj;
+        const button = container?.querySelector?.(".lia-dgs-zoom-mode-button");
+        if (state.hadDgsSnapshot && runtime.view.document && !button) throw new Error("Der DGS-Zoomcontroller ist nicht verf\xfcgbar.");
+        let current = $e8fdc675c2832d65$var$elementDataMode(button) || String(runtime.board.__liaDgsZoomMode ?? "");
+        for(let attempts = 0; current !== zoomMode && attempts < 3; attempts += 1){
+            if (!$e8fdc675c2832d65$var$clickElement(button)) break;
+            current = $e8fdc675c2832d65$var$elementDataMode(button) || String(runtime.board.__liaDgsZoomMode ?? "");
+        }
+        if (button && current !== zoomMode) throw new Error("Der DGS-Zoommodus wurde nicht live wiederhergestellt.");
+        runtime.board.__liaDgsZoomMode = zoomMode;
+    }
+    const axisScaleMode = String(state.boardState.axisScaleMode ?? "");
+    const axisModes = [
+        "cartesian",
+        "log-x",
+        "log-y",
+        "log-log"
+    ];
+    if (axisModes.includes(axisScaleMode)) {
+        const mainButton = runtime.board.containerObj?.querySelector?.(".lia-dgs-axis-scale-button");
+        const controlledId = mainButton?.getAttribute?.("aria-controls") ?? "";
+        const marker = $e8fdc675c2832d65$var$dgsSpecElements(runtime, state.boardId)[0];
+        const uid = marker?.id.replace(/^dgs-ui-/, "") ?? "";
+        const menuId = controlledId || (uid ? `dgs-axis-scale-submenu-${uid}` : "");
+        const containerMenu = runtime.board.containerObj?.querySelector?.(".lia-dgs-axis-scale-submenu");
+        const menu = containerMenu ?? (menuId ? $e8fdc675c2832d65$var$specElement(runtime, menuId) : undefined);
+        if (state.hadDgsSnapshot && runtime.view.document && (!menu || !mainButton)) throw new Error("Der DGS-Achsenskalierungscontroller ist nicht verf\xfcgbar.");
+        let current = $e8fdc675c2832d65$var$elementDataMode(mainButton) || String(runtime.board.__liaDgsAxisScaleMode ?? "");
+        if (current !== axisScaleMode && menu) {
+            const buttons = Array.from(menu.querySelectorAll("[role='menuitemradio']"));
+            $e8fdc675c2832d65$var$clickElement(buttons[axisModes.indexOf(axisScaleMode)]);
+            current = $e8fdc675c2832d65$var$elementDataMode(mainButton) || String(runtime.board.__liaDgsAxisScaleMode ?? "");
+        }
+        if (mainButton && current !== axisScaleMode) throw new Error("Die DGS-Achsenskalierung wurde nicht live wiederhergestellt.");
+        runtime.board.__liaDgsAxisScaleMode = axisScaleMode;
+    }
+    $e8fdc675c2832d65$var$boardStateStore(runtime.globals)[state.boardId] = $e8fdc675c2832d65$var$cloneRecord(state.boardState);
+}
+function $e8fdc675c2832d65$var$restorePointPositions(runtime, state) {
+    const bucket = $e8fdc675c2832d65$var$isRecord(runtime.globals.__points) ? runtime.globals.__points[state.boardId] : undefined;
+    if (!$e8fdc675c2832d65$var$isRecord(bucket)) return;
+    for (const [name, value] of Object.entries(state.pointStates)){
+        if (!$e8fdc675c2832d65$var$isRecord(value)) continue;
+        const x = $e8fdc675c2832d65$var$finite(value.x);
+        const y = $e8fdc675c2832d65$var$finite(value.y);
+        const point = $e8fdc675c2832d65$var$isRecord(bucket[name]) ? bucket[name] : undefined;
+        if (!point || x === undefined || y === undefined) continue;
+        try {
+            const moveTo = $e8fdc675c2832d65$var$method(point, "moveTo");
+            if (moveTo) Reflect.apply(moveTo, point, [
+                [
+                    x,
+                    y
+                ],
+                0
+            ]);
+        } catch  {
+        // A removed macro point will be recreated by the next bootstrap pass.
+        }
+    }
+}
+function $e8fdc675c2832d65$var$restoreSliders(runtime, state) {
+    const entries = $e8fdc675c2832d65$var$isRecord(runtime.globals.__sliderEntries) ? runtime.globals.__sliderEntries : undefined;
+    for (const [key, saved] of Object.entries(state.sliderStates)){
+        const candidates = [
+            entries?.[key],
+            ...Object.values(entries ?? {})
+        ];
+        const entry = candidates.find((value)=>$e8fdc675c2832d65$var$isRecord(value) && String(value.uid ?? "") === saved.uid && String(value.boardId ?? "") === saved.boardId && String(value.name ?? "") === saved.name);
+        if (!$e8fdc675c2832d65$var$isRecord(entry) || !$e8fdc675c2832d65$var$isRecord(entry.slider)) continue;
+        const slider = entry.slider;
+        if (slider.board !== runtime.board) continue;
+        try {
+            const setValue = $e8fdc675c2832d65$var$method(slider, "setValue");
+            if (setValue) Reflect.apply(setValue, slider, [
+                saved.value
+            ]);
+            slider.__liaDgsSliderValue = saved.value;
+            if (saved.points) for (const [point, position] of [
+                [
+                    slider.point1,
+                    saved.points[0]
+                ],
+                [
+                    slider.point2,
+                    saved.points[1]
+                ]
+            ]){
+                if (!$e8fdc675c2832d65$var$isRecord(point)) continue;
+                const moveTo = $e8fdc675c2832d65$var$method(point, "moveTo");
+                if (moveTo) Reflect.apply(moveTo, point, [
+                    [
+                        position.x,
+                        position.y
+                    ],
+                    0
+                ]);
+            }
+        } catch  {
+        // A late slider is handled by the following reset pass.
+        }
+    }
+}
+function $e8fdc675c2832d65$var$restoreScharPanels(runtime, state) {
+    const entries = $e8fdc675c2832d65$var$isRecord(runtime.globals.__scharEntries) ? runtime.globals.__scharEntries : undefined;
+    for (const [key, savedValue] of Object.entries(state.scharStates)){
+        if (!$e8fdc675c2832d65$var$isRecord(savedValue)) continue;
+        const separator = key.indexOf("::");
+        const uid = separator >= 0 ? key.slice(0, separator) : key;
+        const entry = Object.values(entries ?? {}).find((value)=>$e8fdc675c2832d65$var$isRecord(value) && String(value.uid ?? "") === uid && String(value.boardId ?? "") === state.boardId);
+        if (!$e8fdc675c2832d65$var$isRecord(entry)) continue;
+        entry.values = $e8fdc675c2832d65$var$cloneRecord(savedValue.values);
+        entry.panelScale = $e8fdc675c2832d65$var$finite(savedValue.panelScale) ?? 0.55;
+        entry.panelMinimized = savedValue.panelMinimized === true;
+        entry.termVisible = savedValue.termVisible === true;
+        const panel = $e8fdc675c2832d65$var$isRecord(entry.panel) ? entry.panel : undefined;
+        const style = $e8fdc675c2832d65$var$isRecord(panel?.style) ? panel.style : undefined;
+        if (style) {
+            style.transformOrigin = "top left";
+            style.transform = `scale(${entry.panelScale})`;
+        }
+    }
+}
+function $e8fdc675c2832d65$var$specElement(runtime, id) {
+    try {
+        const node = runtime.view.document?.getElementById(id);
+        return node ?? undefined;
+    } catch  {
+        return undefined;
+    }
+}
+function $e8fdc675c2832d65$var$restoreTargetScharRenderer(runtime, state) {
+    const render = $e8fdc675c2832d65$var$method(runtime.globals, "renderScharFromSpec");
+    if (!render) return;
+    for (const key of Object.keys(state.scharStates)){
+        const separator = key.indexOf("::");
+        const uid = separator >= 0 ? key.slice(0, separator) : key;
+        const node = $e8fdc675c2832d65$var$specElement(runtime, `schar-spec-${uid}`);
+        const spec = String(node?.dataset.spec ?? "");
+        if (!uid || !spec) continue;
+        Reflect.apply(render, runtime.view, [
+            uid,
+            spec
+        ]);
+    }
+}
+function $e8fdc675c2832d65$var$restoreTargetSliderRenderers(runtime, state, recreateDeleted) {
+    const render = $e8fdc675c2832d65$var$method(runtime.globals, "renderSliderFromSpec");
+    if (!render) return;
+    const entries = $e8fdc675c2832d65$var$isRecord(runtime.globals.__sliderEntries) ? runtime.globals.__sliderEntries : undefined;
+    const rendered = new Set();
+    for (const saved of Object.values(state.sliderStates)){
+        if (rendered.has(saved.uid)) continue;
+        rendered.add(saved.uid);
+        if (recreateDeleted && entries) {
+            for (const [key, value] of Object.entries(entries))if ($e8fdc675c2832d65$var$isRecord(value) && String(value.uid ?? "") === saved.uid && String(value.boardId ?? "") === state.boardId && $e8fdc675c2832d65$var$isRecord(value.slider) && value.slider.__liaDgsSliderDeleted === true) delete entries[key];
+        }
+        const node = $e8fdc675c2832d65$var$specElement(runtime, `slider-spec-${saved.uid}`);
+        const spec = String(node?.dataset.spec ?? "");
+        if (!spec) continue;
+        Reflect.apply(render, runtime.view, [
+            saved.uid,
+            spec,
+            String(node?.dataset.language ?? "de")
+        ]);
+    }
+}
+function $e8fdc675c2832d65$var$restoreTargetStaticPointRenderers(runtime, state) {
+    if (!$e8fdc675c2832d65$var$isRecord(state.dgsSnapshot) || !Array.isArray(state.dgsSnapshot.records)) return;
+    const liveKeys = new Set();
+    for (const object of $e8fdc675c2832d65$var$liveBoardObjectSet(runtime.board)){
+        liveKeys.add(String(object.__liaDgsMacroKey ?? ""));
+        liveKeys.add(String(object.__liaDgsPersistentId ?? ""));
+    }
+    const render = $e8fdc675c2832d65$var$method(runtime.globals, "renderStaticPointFromSpec");
+    if (!render) return;
+    for (const record of state.dgsSnapshot.records){
+        if (!$e8fdc675c2832d65$var$isRecord(record)) continue;
+        const key = String(record.macroKey || record.id || "");
+        const match = /^macro:point:(.+)$/.exec(key);
+        if (!match || liveKeys.has(key)) continue;
+        const uid = match[1];
+        const node = $e8fdc675c2832d65$var$specElement(runtime, `point-spec-${uid}`);
+        const spec = String(node?.dataset.spec ?? "");
+        if (!spec) continue;
+        Reflect.apply(render, runtime.globals, [
+            uid,
+            spec
+        ]);
+    }
+}
+function $e8fdc675c2832d65$var$restoreTables(runtime, state) {
+    const store = $e8fdc675c2832d65$var$isRecord(runtime.globals.__tableStates) ? runtime.globals.__tableStates : undefined;
+    for (const [uid, saved] of Object.entries(state.tableStates)){
+        const live = $e8fdc675c2832d65$var$isRecord(store?.[uid]) ? store[uid] : undefined;
+        if (!live || String(live.boardId ?? "") !== state.boardId) continue;
+        const values = saved.values.map((value)=>({
+                x: value.x,
+                y: value.y
+            }));
+        live.values = values;
+        live.cols = values.length;
+        live.cellWidths = $e8fdc675c2832d65$var$cloneRecord(saved.cellWidths);
+        try {
+            $e8fdc675c2832d65$var$call(runtime.globals, "setTableValues", [
+                uid,
+                values
+            ]);
+            const root = $e8fdc675c2832d65$var$specElement(runtime, `lia-table-${uid}`);
+            const render = $e8fdc675c2832d65$var$method(runtime.globals, "renderTableFromSpec");
+            if (root && render && Object.keys(saved.cellWidths).length > 0) Reflect.apply(render, runtime.view, [
+                uid,
+                String(root.dataset.spec ?? live.spec ?? ""),
+                true
+            ]);
+        } catch  {
+        // A late table is handled by the following reset pass.
+        }
+    }
+}
+function $e8fdc675c2832d65$var$restorePlotInputs(runtime, state) {
+    const states = $e8fdc675c2832d65$var$isRecord(runtime.globals.__plotInputStates) ? runtime.globals.__plotInputStates : undefined;
+    const instances = $e8fdc675c2832d65$var$isRecord(runtime.globals.__plotInputInstances) ? runtime.globals.__plotInputInstances : undefined;
+    const api = $e8fdc675c2832d65$var$isRecord(runtime.globals.__plotInput) ? runtime.globals.__plotInput : undefined;
+    for (const [uid, saved] of Object.entries(state.plotInputStates)){
+        const live = $e8fdc675c2832d65$var$isRecord(states?.[uid]) ? states[uid] : undefined;
+        if (!live || String(live.boardId ?? "") !== state.boardId) continue;
+        try {
+            $e8fdc675c2832d65$var$call(api, "removePlotObjects", [
+                runtime.board,
+                live
+            ]);
+            live.raw = saved.raw;
+            const instance = $e8fdc675c2832d65$var$isRecord(instances?.[uid]) ? instances[uid] : undefined;
+            const input = instance?.input;
+            if ($e8fdc675c2832d65$var$isRecord(input) && "value" in input) input.value = saved.raw;
+            if (saved.plotted) {
+                const plot = $e8fdc675c2832d65$var$method(api, "plotIntoBoard");
+                if (!plot) throw new Error("Der PlotInput-Renderer ist nicht verf\xfcgbar.");
+                Reflect.apply(plot, api, [
+                    runtime.board,
+                    live,
+                    saved.raw
+                ]);
+            }
+        } catch  {
+        // Verifikation meldet einen nicht wiederherstellbaren PlotInput.
+        }
+    }
+}
+function $e8fdc675c2832d65$var$setupTargetRegression(runtime, state) {
+    const setup = $e8fdc675c2832d65$var$method(runtime.globals, "__setupRegressionUI");
+    if (!setup) throw new Error("Der Regression-Renderer ist nicht verf\xfcgbar.");
+    const dgsMarkers = $e8fdc675c2832d65$var$dgsSpecElements(runtime, state.boardId);
+    for (const uid of state.regressionUids){
+        const explicit = $e8fdc675c2832d65$var$specElement(runtime, `regression-ui-${uid}`);
+        const dgsUid = uid.startsWith("dgs-regression-") ? uid.slice(15) : "";
+        const dgsMarker = dgsUid ? dgsMarkers.find((node)=>node.id === `dgs-ui-${dgsUid}`) : undefined;
+        const spec = String(explicit?.dataset.spec ?? state.boardId);
+        const language = String(explicit?.dataset.language ?? dgsMarker?.dataset.language ?? "de");
+        Reflect.apply(setup, runtime.globals, [
+            uid,
+            spec,
+            language
+        ]);
+    }
+    if (state.regressionUids.some((uid)=>uid.startsWith("dgs-regression-"))) {
+        const setupDgs = $e8fdc675c2832d65$var$method(runtime.globals, "__setupDGS");
+        if (!setupDgs || dgsMarkers.length === 0) return;
+        for (const marker of dgsMarkers){
+            const uid = marker.id.replace(/^dgs-ui-/, "");
+            const spec = String(marker.dataset.spec ?? "");
+            if (!uid || !spec) continue;
+            Reflect.apply(setupDgs, runtime.globals, [
+                uid,
+                spec,
+                String(marker.dataset.language ?? "de")
+            ]);
+        }
+    }
+}
+function $e8fdc675c2832d65$var$restoreRegression(runtime, state) {
+    if (state.regressionUids.length === 0) return;
+    const currentUids = $e8fdc675c2832d65$var$liveRegressionUids(runtime, state.boardId);
+    const currentSnapshots = $e8fdc675c2832d65$var$liveRegressionSnapshots(runtime, state.boardId);
+    if ($e8fdc675c2832d65$var$sameJson(currentUids, state.regressionUids) && $e8fdc675c2832d65$var$sameJson(currentSnapshots, state.regressionSnapshots)) return;
+    const key = `board:${state.boardId}`;
+    const snapshot = state.regressionSnapshots[key];
+    if (snapshot === undefined) throw new Error("Der Regression-Makrozustand ist besch\xe4digt.");
+    const snapshots = $e8fdc675c2832d65$var$recordStore(runtime.globals, "__liaRegressionSnapshots");
+    const states = $e8fdc675c2832d65$var$isRecord(runtime.globals.__liaRegressionStates) ? runtime.globals.__liaRegressionStates : undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(snapshots, key);
+    try {
+        Object.defineProperty(snapshots, key, {
+            value: $e8fdc675c2832d65$var$cloneJson(snapshot),
+            writable: false,
+            enumerable: true,
+            configurable: true
+        });
+        for (const uid of state.regressionUids){
+            const live = $e8fdc675c2832d65$var$isRecord(states?.[uid]) ? states[uid] : undefined;
+            if (!live || String(live.boardId ?? "") !== state.boardId) continue;
+            $e8fdc675c2832d65$var$call($e8fdc675c2832d65$var$isRecord(live.drawLayer) ? live.drawLayer : undefined, "remove");
+        }
+        $e8fdc675c2832d65$var$withRestoreFlag(runtime.globals, ()=>{
+            $e8fdc675c2832d65$var$setupTargetRegression(runtime, state);
+        });
+    } finally{
+        Object.defineProperty(snapshots, key, {
+            value: $e8fdc675c2832d65$var$cloneJson(snapshot),
+            writable: true,
+            enumerable: descriptor?.enumerable ?? true,
+            configurable: descriptor?.configurable ?? true
+        });
+    }
+}
+function $e8fdc675c2832d65$var$liveBoardObjectSet(board) {
+    const result = new Set();
+    if (Array.isArray(board.objectsList)) {
+        for (const value of board.objectsList)if ($e8fdc675c2832d65$var$isRecord(value)) result.add(value);
+    }
+    if ($e8fdc675c2832d65$var$isRecord(board.objects)) {
+        for (const value of Object.values(board.objects))if ($e8fdc675c2832d65$var$isRecord(value)) result.add(value);
+    }
+    return result;
+}
+function $e8fdc675c2832d65$var$isMacroManagedBoardObject(value) {
+    if (value.__liaDgsDesignOwner || value.__liaDgsTraceMarker === true) return false;
+    return value.__liaDgsMacroManaged === true || String(value.__liaDgsMacroKey ?? "").startsWith("macro:") || String(value.__liaDgsPersistentId ?? "").startsWith("macro:") || $e8fdc675c2832d65$var$finite(value.__liaMacroSourceLayer) !== undefined;
+}
+const $e8fdc675c2832d65$var$MACRO_OWNED_SINGLE_CHILDREN = [
+    "label",
+    "arc",
+    "dot",
+    "__liaDgsMeasurementLabel",
+    "__liaDgsAngleLabel",
+    "__liaDgsCircleLabel",
+    "__liaDgsCircleNameLabel",
+    "__liaDgsCircleMeasurementLabel",
+    "__liaDgsFunctionLabel",
+    "__liaDgsArcLabel",
+    "__liaDgsPolygonBorderLabel",
+    "__liaDgsTangentPoint",
+    "__liaDgsTangentHelper"
+];
+const $e8fdc675c2832d65$var$MACRO_OWNED_ARRAY_CHILDREN = [
+    "borders",
+    "__liaDgsPolygonBorders"
+];
+function $e8fdc675c2832d65$var$addOwnedBoardObject(value, candidates, result) {
+    if (Array.isArray(value)) {
+        for (const entry of value)$e8fdc675c2832d65$var$addOwnedBoardObject(entry, candidates, result);
+        return;
+    }
+    if ($e8fdc675c2832d65$var$isRecord(value) && candidates.has(value)) result.add(value);
+}
+function $e8fdc675c2832d65$var$macroManagedBoardObjects(board) {
+    const candidates = $e8fdc675c2832d65$var$liveBoardObjectSet(board);
+    const result = new Set(Array.from(candidates).filter($e8fdc675c2832d65$var$isMacroManagedBoardObject));
+    let previousSize = -1;
+    while(previousSize !== result.size){
+        previousSize = result.size;
+        for (const object of Array.from(result)){
+            for (const property of $e8fdc675c2832d65$var$MACRO_OWNED_SINGLE_CHILDREN)$e8fdc675c2832d65$var$addOwnedBoardObject(object[property], candidates, result);
+            for (const property of $e8fdc675c2832d65$var$MACRO_OWNED_ARRAY_CHILDREN)$e8fdc675c2832d65$var$addOwnedBoardObject(object[property], candidates, result);
+            if (object.__liaDgsSlider === true || object.__liaMacroSlider === true || String(object.elType ?? "").toLowerCase() === "slider") for (const property of [
+                "baseline",
+                "highline",
+                "point1",
+                "point2"
+            ])$e8fdc675c2832d65$var$addOwnedBoardObject(object[property], candidates, result);
+        }
+        for (const candidate of candidates)if ($e8fdc675c2832d65$var$isRecord(candidate.__liaDgsOwner) && result.has(candidate.__liaDgsOwner) || $e8fdc675c2832d65$var$isRecord(candidate.__liaDgsSliderOwner) && result.has(candidate.__liaDgsSliderOwner) || $e8fdc675c2832d65$var$isRecord(candidate.__liaDgsPolygonBorderOwner) && result.has(candidate.__liaDgsPolygonBorderOwner)) result.add(candidate);
+    }
+    return result;
+}
+function $e8fdc675c2832d65$var$withProtectedMacroObjects(runtime, boardId, callback) {
+    const protectedObjects = $e8fdc675c2832d65$var$macroManagedBoardObjects(runtime.board);
+    if (protectedObjects.size === 0) return callback();
+    const originalRemove = runtime.board.removeObject;
+    if (typeof originalRemove !== "function") throw new Error("Das Coordinate-Board kann Makroobjekte nicht sicher sch\xfctzen.");
+    const registry = $e8fdc675c2832d65$var$isRecord(runtime.globals.__points) ? runtime.globals.__points : undefined;
+    const bucket = $e8fdc675c2832d65$var$isRecord(registry?.[boardId]) ? registry[boardId] : undefined;
+    const pointAliases = Object.entries(bucket ?? {}).filter(([, value])=>$e8fdc675c2832d65$var$isRecord(value) && protectedObjects.has(value));
+    const tangentLinks = Array.from(protectedObjects).filter((object)=>object.__liaDgsTangent === true).map((tangent)=>({
+            tangent: tangent,
+            source: $e8fdc675c2832d65$var$isRecord(tangent.__liaDgsTangentSource) ? tangent.__liaDgsTangentSource : undefined
+        }));
+    const ownDescriptor = Object.getOwnPropertyDescriptor(runtime.board, "removeObject");
+    const protectedRemove = function(object, ...args) {
+        const requested = Array.isArray(object) ? object : [
+            object
+        ];
+        const removable = requested.filter((value)=>!$e8fdc675c2832d65$var$isRecord(value) || !protectedObjects.has(value));
+        if (removable.length === 0) return this;
+        const target = Array.isArray(object) ? removable : removable[0];
+        return Reflect.apply(originalRemove, this, [
+            target,
+            ...args
+        ]);
+    };
+    try {
+        Object.defineProperty(runtime.board, "removeObject", {
+            value: protectedRemove,
+            writable: true,
+            enumerable: ownDescriptor?.enumerable ?? false,
+            configurable: true
+        });
+    } catch  {
+        throw new Error("Das Coordinate-Board kann Makroobjekte nicht sicher sch\xfctzen.");
+    }
+    try {
+        return callback();
+    } finally{
+        if (ownDescriptor) Object.defineProperty(runtime.board, "removeObject", ownDescriptor);
+        else delete runtime.board.removeObject;
+        if (pointAliases.length > 0) {
+            const points = $e8fdc675c2832d65$var$recordStore(runtime.globals, "__points");
+            const liveBucket = $e8fdc675c2832d65$var$isRecord(points[boardId]) ? points[boardId] : points[boardId] = {};
+            for (const [name, point] of pointAliases)liveBucket[name] = point;
+        }
+        for (const object of protectedObjects)if (object.__liaDgsSlider === true) object.__liaDgsSliderDeleted = false;
+        for (const { tangent: tangent, source: source } of tangentLinks){
+            if (!source) continue;
+            const tangents = Array.isArray(source.__liaDgsTangents) ? source.__liaDgsTangents : [];
+            if (!tangents.includes(tangent)) source.__liaDgsTangents = [
+                ...tangents,
+                tangent
+            ];
+        }
+    }
+}
+function $e8fdc675c2832d65$var$applyDgsSnapshot(runtime, state) {
+    if (!state.hadDgsSnapshot) {
+        delete $e8fdc675c2832d65$var$recordStore(runtime.globals, "__dgsConstructionStates")[state.boardId];
+        return;
+    }
+    const apply = $e8fdc675c2832d65$var$method(runtime.globals, "__applyDgsHistory");
+    const controllers = $e8fdc675c2832d65$var$isRecord(runtime.globals.__dgsConstructionBoards) ? runtime.globals.__dgsConstructionBoards : undefined;
+    if (!apply || state.dgsSnapshot === undefined || controllers?.[state.boardId] !== runtime.board) throw new Error("lia-coordinate stellt keinen vollst\xe4ndigen DGS-Reset bereit.");
+    const snapshot = $e8fdc675c2832d65$var$cloneJson(state.dgsSnapshot);
+    if (snapshot === undefined) throw new Error("Der DGS-Makrozustand ist besch\xe4digt.");
+    $e8fdc675c2832d65$var$withProtectedMacroObjects(runtime, state.boardId, ()=>{
+        Reflect.apply(apply, runtime.globals, [
+            state.boardId,
+            snapshot
+        ]);
+    });
+    const stored = $e8fdc675c2832d65$var$isRecord(runtime.globals.__dgsConstructionStates) ? runtime.globals.__dgsConstructionStates[state.boardId] : undefined;
+    if (controllers[state.boardId] !== runtime.board || !$e8fdc675c2832d65$var$sameJson(stored, snapshot)) throw new Error("Der DGS-Makrozustand wurde nicht live angewendet.");
+}
+function $e8fdc675c2832d65$export$2d18c31e31bdc61c(runtime, state, options = {}) {
+    $e8fdc675c2832d65$var$seedMacroStores(runtime, state);
+    const applyDgs = options.applyDgs !== false;
+    if (applyDgs) {
+        $e8fdc675c2832d65$var$applyDgsSnapshot(runtime, state);
+        // DGS clears point registries while rebuilding its learner construction.
+        // Re-seed the authored stores after the protected live apply as well.
+        $e8fdc675c2832d65$var$seedMacroStores(runtime, state);
+    }
+    $e8fdc675c2832d65$var$restoreTargetStaticPointRenderers(runtime, state);
+    $e8fdc675c2832d65$var$restoreTargetScharRenderer(runtime, state);
+    $e8fdc675c2832d65$var$restoreTargetSliderRenderers(runtime, state, applyDgs && state.hadDgsSnapshot);
+    $e8fdc675c2832d65$var$restorePointPositions(runtime, state);
+    $e8fdc675c2832d65$var$restoreSliders(runtime, state);
+    $e8fdc675c2832d65$var$restoreScharPanels(runtime, state);
+    $e8fdc675c2832d65$var$restoreTables(runtime, state);
+    $e8fdc675c2832d65$var$restorePlotInputs(runtime, state);
+    $e8fdc675c2832d65$var$restoreRegression(runtime, state);
+    $e8fdc675c2832d65$var$restoreBoard(runtime, state);
+    $e8fdc675c2832d65$var$restoreDgsViewModes(runtime, state);
+}
+function $e8fdc675c2832d65$var$canonical(value) {
+    if (Array.isArray(value)) return value.map($e8fdc675c2832d65$var$canonical);
+    if (!$e8fdc675c2832d65$var$isRecord(value)) return value;
+    return Object.fromEntries(Object.keys(value).sort().map((key)=>[
+            key,
+            $e8fdc675c2832d65$var$canonical(value[key])
+        ]));
+}
+function $e8fdc675c2832d65$var$sameJson(left, right) {
+    return JSON.stringify($e8fdc675c2832d65$var$canonical(left)) === JSON.stringify($e8fdc675c2832d65$var$canonical(right));
+}
+function $e8fdc675c2832d65$var$sameNumber(left, right, tolerance = 1e-7) {
+    const a = $e8fdc675c2832d65$var$finite(left);
+    const b = $e8fdc675c2832d65$var$finite(right);
+    return a !== undefined && b !== undefined && Math.abs(a - b) <= tolerance;
+}
+function $e8fdc675c2832d65$var$sameBoardView(left, right) {
+    const leftMode = String(left.sizeMode ?? "auto");
+    const rightMode = String(right.sizeMode ?? "auto");
+    const leftBox = $e8fdc675c2832d65$var$validBoundingBox(left.exportBBox) ?? $e8fdc675c2832d65$var$validBoundingBox(left.bbox);
+    const rightBox = $e8fdc675c2832d65$var$validBoundingBox(right.exportBBox) ?? $e8fdc675c2832d65$var$validBoundingBox(right.bbox);
+    if (!leftBox || !rightBox || !leftBox.every((value, index)=>$e8fdc675c2832d65$var$sameNumber(value, rightBox[index]))) return false;
+    if (leftMode !== rightMode) return false;
+    if (leftMode === "manual") for (const dimension of [
+        "width",
+        "height"
+    ]){
+        if ($e8fdc675c2832d65$var$finite(left[dimension]) !== undefined && $e8fdc675c2832d65$var$finite(right[dimension]) !== undefined && !$e8fdc675c2832d65$var$sameNumber(left[dimension], right[dimension], 1)) return false;
+    }
+    for (const mode of [
+        "zoomMode",
+        "axisScaleMode"
+    ]){
+        const expected = String(right[mode] ?? "");
+        if (expected && String(left[mode] ?? "") !== expected) return false;
+    }
+    return true;
+}
+function $e8fdc675c2832d65$var$missingLiveDgsMacroObjects(runtime, expected) {
+    if (!expected.hadDgsSnapshot || !$e8fdc675c2832d65$var$isRecord(expected.dgsSnapshot)) return [];
+    const records = Array.isArray(expected.dgsSnapshot.records) ? expected.dgsSnapshot.records : [];
+    const expectedKeys = records.filter((record)=>$e8fdc675c2832d65$var$isRecord(record) && (record.origin === "macro" || Boolean(record.macroKey) || String(record.id ?? "").startsWith("macro:"))).map((record)=>$e8fdc675c2832d65$var$isRecord(record) ? String(record.macroKey || record.id || "") : "").filter(Boolean);
+    if (expectedKeys.length === 0) return [];
+    const liveKeys = new Set();
+    for (const object of $e8fdc675c2832d65$var$liveBoardObjectSet(runtime.board))for (const value of [
+        object.__liaDgsMacroKey,
+        object.__liaDgsPersistentId
+    ]){
+        const key = String(value ?? "");
+        if (key) liveKeys.add(key);
+    }
+    return expectedKeys.filter((key)=>!liveKeys.has(key));
+}
+function $e8fdc675c2832d65$export$9384c65942316954(runtime, expected) {
+    return $e8fdc675c2832d65$export$470856610dfec380(runtime, expected) === undefined;
+}
+function $e8fdc675c2832d65$export$470856610dfec380(runtime, expected) {
+    let current;
+    try {
+        current = $e8fdc675c2832d65$var$readMacroState(runtime, expected.boardId);
+    } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+    }
+    const differences = [];
+    if (!$e8fdc675c2832d65$var$sameBoardView(current.boardState, expected.boardState)) differences.push("Viewport/Boardgr\xf6\xdfe");
+    if (!$e8fdc675c2832d65$var$sameJson(current.pointStates, expected.pointStates)) differences.push("Punktzust\xe4nde");
+    if (!$e8fdc675c2832d65$var$sameJson(current.pointGraphStates, expected.pointGraphStates)) differences.push("Punktgraphen");
+    if (current.hadDgsSnapshot !== expected.hadDgsSnapshot || !$e8fdc675c2832d65$var$sameJson(current.dgsSnapshot, expected.dgsSnapshot)) differences.push("DGS");
+    if ($e8fdc675c2832d65$var$missingLiveDgsMacroObjects(runtime, expected).length > 0) differences.push("DGS-Makroobjekte");
+    if (!$e8fdc675c2832d65$var$sameJson(current.scharStates, expected.scharStates)) differences.push("Schar");
+    if (!$e8fdc675c2832d65$var$sameJson(current.regressionSnapshots, expected.regressionSnapshots) || !$e8fdc675c2832d65$var$sameJson(current.regressionUids, expected.regressionUids)) differences.push("Regression");
+    if (!$e8fdc675c2832d65$var$sameJson(current.sliderStates, expected.sliderStates)) differences.push("Slider");
+    if (!$e8fdc675c2832d65$var$sameJson(current.tableStates, expected.tableStates)) differences.push("Tabelle");
+    if (!$e8fdc675c2832d65$var$sameJson(current.plotInputStates, expected.plotInputStates)) differences.push("PlotInput");
+    return differences.length > 0 ? differences.join(", ") : undefined;
+}
+
+
 const $b12f2aed45a388f4$var$GENERIC_QUIZ_SELECTOR = ".lia-quiz.lia-quiz-generic";
 const $b12f2aed45a388f4$var$FOLLOWING = 4;
+const $b12f2aed45a388f4$var$coordinateCaptureInteraction = new WeakMap();
 function $b12f2aed45a388f4$var$isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -2585,68 +3704,6 @@ function $b12f2aed45a388f4$var$serializable(value) {
         throw new Error("Ein benachbarter lia-coordinate-Zustand ist nicht sicher vergleichbar.");
     }
 }
-const $b12f2aed45a388f4$var$REGRESSION_ANALYSIS_LISTS = [
-    "analysisEntries",
-    "quadraticAnalysisEntries",
-    "cubicAnalysisEntries",
-    "quarticAnalysisEntries",
-    "sinAnalysisEntries",
-    "expAnalysisEntries",
-    "logAnalysisEntries",
-    "sqrtAnalysisEntries",
-    "hyperbolaAnalysisEntries",
-    "hyperbola2AnalysisEntries"
-];
-function $b12f2aed45a388f4$var$reconstructionStateSnapshot(globals, boardId) {
-    const scharStore = $b12f2aed45a388f4$var$isRecord(globals.__liaScharStateStore) ? Object.fromEntries(Object.entries(globals.__liaScharStateStore).filter(([key])=>key.endsWith(`::${boardId}`)).sort(([left], [right])=>left.localeCompare(right))) : {};
-    const scharEntries = $b12f2aed45a388f4$var$isRecord(globals.__scharEntries) ? Object.entries(globals.__scharEntries).filter(([, value])=>$b12f2aed45a388f4$var$isRecord(value) && value.boardId === boardId).sort(([left], [right])=>left.localeCompare(right)).map(([key, value])=>{
-        const entry = value;
-        return {
-            key: key,
-            uid: entry.uid,
-            boardId: entry.boardId,
-            params: entry.params,
-            values: entry.values,
-            panelScale: entry.panelScale,
-            panelMinimized: entry.panelMinimized,
-            termVisible: entry.termVisible
-        };
-    }) : [];
-    const regressionStates = $b12f2aed45a388f4$var$isRecord(globals.__liaRegressionStates) ? Object.entries(globals.__liaRegressionStates).filter(([, value])=>$b12f2aed45a388f4$var$isRecord(value) && value.boardId === boardId).sort(([left], [right])=>left.localeCompare(right)).map(([key, value])=>{
-        const state = value;
-        return {
-            key: key,
-            uid: state.uid,
-            boardId: state.boardId,
-            drawColor: state.drawColor,
-            activeTool: state.activeTool,
-            regressionMode: state.regressionMode,
-            strokes: state.strokes,
-            regressionPoints: state.regressionPoints,
-            autoCreatedPointsData: state.autoCreatedPointsData,
-            analyses: $b12f2aed45a388f4$var$REGRESSION_ANALYSIS_LISTS.map((list)=>({
-                    list: list,
-                    entries: Array.isArray(state[list]) ? state[list].map((value)=>{
-                        if (!$b12f2aed45a388f4$var$isRecord(value)) return value;
-                        return {
-                            id: value.id,
-                            title: value.title,
-                            color: value.color,
-                            classKey: value.classKey,
-                            model: value.model,
-                            classProbabilities: value.classProbabilities,
-                            linkedModels: value.linkedModels
-                        };
-                    }) : []
-                }))
-        };
-    }) : [];
-    return $b12f2aed45a388f4$var$serializable({
-        scharStore: scharStore,
-        scharEntries: scharEntries,
-        regressionStates: regressionStates
-    });
-}
 function $b12f2aed45a388f4$var$captureSlot(result, container, key, serialize) {
     if (!container) return;
     const existed = $b12f2aed45a388f4$var$hasOwn(container, key);
@@ -2851,8 +3908,10 @@ function $b12f2aed45a388f4$var$verifyPointReset(context) {
     if (!$b12f2aed45a388f4$var$targetRegistryIsEmpty(runtime.state, context.target)) throw new Error("Der lia-coordinate-Zielzustand wurde nicht vollst\xe4ndig geleert.");
     if (!$b12f2aed45a388f4$var$proposalMacroSnapshotIsEmpty(runtime, context.target)) throw new Error("Der persistierte Proposal-DGS-Zustand des Coordinate-Quiz wurde nicht geleert.");
     const currentObjects = new Set($b12f2aed45a388f4$var$liveBoardObjects(runtime.board));
-    if (context.retainedBoardObjects.some((object)=>!currentObjects.has(object)) || context.initiallyOwnedBoardObjects.some((object)=>currentObjects.has(object)) || Array.from(context.removedObjects).some((object)=>currentObjects.has(object))) throw new Error("Beim lia-coordinate-Reset wurde der JSXGraph-Zustand nicht isoliert ver\xe4ndert.");
+    if (context.initiallyOwnedBoardObjects.some((object)=>currentObjects.has(object)) || Array.from(context.removedObjects).some((object)=>currentObjects.has(object))) throw new Error("Beim lia-coordinate-Reset wurde der JSXGraph-Zustand nicht isoliert ver\xe4ndert.");
     if (!$b12f2aed45a388f4$var$verifySnapshot(context.siblingSnapshot)) throw new Error("Beim lia-coordinate-Reset wurde ein anderes Koordinatenquiz ver\xe4ndert.");
+    const mismatch = (0, $e8fdc675c2832d65$export$470856610dfec380)(runtime, context.macroState);
+    if (mismatch) throw new Error(`Das lia-coordinate-Board entspricht nach dem Reset nicht seinem Makrozustand${mismatch ? ` (${mismatch})` : ""}.`);
     const place = $b12f2aed45a388f4$var$placementButton(descriptor, context.scope);
     if (!place || place.disabled || place.getAttribute("aria-disabled") === "true" || place.style.pointerEvents === "none") throw new Error("Das lia-coordinate-Quiz ist nach dem Reset nicht wieder bedienbar.");
     for (const object of $b12f2aed45a388f4$var$liveBoardObjects(runtime.board)){
@@ -2864,12 +3923,303 @@ function $b12f2aed45a388f4$var$waitForAnimationFrame() {
 }
 async function $b12f2aed45a388f4$var$waitForCoordinateSettle() {
     await $b12f2aed45a388f4$var$waitForAnimationFrame();
-    await new Promise((resolve)=>window.setTimeout(resolve, 180));
+    await new Promise((resolve)=>window.setTimeout(resolve, 260));
     await $b12f2aed45a388f4$var$waitForAnimationFrame();
 }
-function $b12f2aed45a388f4$export$f3ea75d78bf3c9ee(quiz, scope) {
+function $b12f2aed45a388f4$var$descriptorBoardId(descriptor) {
+    return "target" in descriptor ? descriptor.target.boardId : descriptor.boardId;
+}
+const $b12f2aed45a388f4$var$COORDINATE_AUTHORED_MARKERS = [
+    {
+        macroKind: "point",
+        selector: "[id^='point-spec-'][data-spec]",
+        prefix: "point-spec-",
+        renderer: "renderStaticPointFromSpec",
+        renderMode: "plain",
+        dgsKeyPrefix: (uid)=>`macro:point:${uid}`
+    },
+    {
+        macroKind: "coord-text",
+        selector: ".lia-coord-text-spec[id][data-spec],[id^='coord-text-spec-'][data-spec]",
+        prefix: "coord-text-spec-",
+        renderer: "renderCoordTextFromSpec",
+        renderMode: "plain",
+        dgsKeyPrefix: (uid)=>`macro:coordTextEntries:coord-text-${uid}:text`
+    },
+    {
+        macroKind: "distance",
+        selector: "[id^='distance-spec-'][data-spec]",
+        prefix: "distance-spec-",
+        renderer: "renderDistanceFromSpec",
+        renderMode: "language",
+        dgsKeyPrefix: (uid)=>`macro:distanceEntries:distance-${uid}:`
+    },
+    {
+        macroKind: "linear",
+        selector: "[id^='linear-spec-'][data-spec]",
+        prefix: "linear-spec-",
+        renderer: "renderLinearObjectFromSpec",
+        renderMode: "kind-language",
+        dgsKeyPrefix: (uid)=>`macro:linearObjectEntries:linear-${uid}:`
+    },
+    {
+        macroKind: "arc",
+        selector: "[id^='arc-spec-'][data-spec]",
+        prefix: "arc-spec-",
+        renderer: "renderArcFromSpec",
+        renderMode: "language",
+        dgsKeyPrefix: (uid)=>`macro:arcEntries:arc-${uid}:`
+    },
+    {
+        macroKind: "relation",
+        selector: "[id^='relation-spec-'][data-spec]",
+        prefix: "relation-spec-",
+        renderer: "renderRelationObjectFromSpec",
+        renderMode: "kind-language",
+        dgsKeyPrefix: (uid)=>`macro:relationObjectEntries:relation-${uid}:`
+    },
+    {
+        macroKind: "area",
+        selector: "[id^='area-spec-'][data-spec]",
+        prefix: "area-spec-",
+        renderer: "renderAreaFromSpec",
+        renderMode: "language",
+        dgsKeyPrefix: (uid)=>`macro:areaEntries:area-${uid}:`
+    },
+    {
+        macroKind: "angle",
+        selector: "[id^='angle-spec-'][data-spec]",
+        prefix: "angle-spec-",
+        renderer: "renderAngleFromSpec",
+        renderMode: "language",
+        dgsKeyPrefix: (uid)=>`macro:angleEntries:angle-${uid}:angle`
+    },
+    {
+        macroKind: "circle",
+        selector: "[id^='circle-spec-'][data-spec]",
+        prefix: "circle-spec-",
+        renderer: "renderCircleFromSpec",
+        renderMode: "language",
+        dgsKeyPrefix: (uid)=>`macro:circleEntries:circle-${uid}:circle`
+    },
+    {
+        macroKind: "tangent",
+        selector: "[id^='tangent-spec-'][data-spec]",
+        prefix: "tangent-spec-",
+        renderer: "renderTangentFromSpec",
+        renderMode: "language",
+        dgsKeyPrefix: (uid)=>`macro:tangentEntries:tangent-${uid}:`
+    },
+    {
+        macroKind: "sector",
+        selector: "[id^='sector-spec-'][data-spec]",
+        prefix: "sector-spec-",
+        renderer: "renderCircularSectorFromSpec",
+        renderMode: "language",
+        dgsKeyPrefix: (uid)=>`macro:sectorEntries:sector-${uid}:sector`
+    },
+    {
+        macroKind: "plot",
+        selector: "[id^='plot-spec-'][data-spec]",
+        prefix: "plot-spec-",
+        renderer: "renderPlotFunctionFromSpec",
+        renderMode: "plain",
+        dgsKeyPrefix: (uid)=>`macro:plotFunctionEntries:plot-${uid}:graph`
+    },
+    {
+        macroKind: "function-analysis",
+        selector: "[id^='function-analysis-spec-'][data-spec]",
+        prefix: "function-analysis-spec-",
+        renderer: "renderFunctionAnalysisPointsFromSpec",
+        renderMode: "kind-language"
+    },
+    {
+        macroKind: "object-analysis",
+        selector: "[id^='object-analysis-spec-'][data-spec]",
+        prefix: "object-analysis-spec-",
+        renderer: "renderObjectAnalysisPointsFromSpec",
+        renderMode: "kind-language"
+    }
+];
+function $b12f2aed45a388f4$var$markerUid(node, prefix) {
+    return node.id.startsWith(prefix) ? node.id.slice(prefix.length) : "";
+}
+function $b12f2aed45a388f4$var$marker(node, prefix) {
+    const uid = $b12f2aed45a388f4$var$markerUid(node, prefix);
+    const spec = String(node.dataset.spec ?? "").trim();
+    return uid && spec ? {
+        node: node,
+        uid: uid,
+        spec: spec,
+        language: String(node.dataset.language ?? "de")
+    } : undefined;
+}
+function $b12f2aed45a388f4$var$markersForBoard(scope, selector, prefix, boardId, boardPart = 0) {
+    return Array.from(scope.querySelectorAll(selector)).map((node)=>$b12f2aed45a388f4$var$marker(node, prefix)).filter((entry)=>entry !== undefined && $b12f2aed45a388f4$var$specParts(entry.spec)[boardPart] === boardId);
+}
+function $b12f2aed45a388f4$var$tableBoardId(spec) {
+    for (const part of $b12f2aed45a388f4$var$specParts(spec).slice(3)){
+        const match = /^id\s*=\s*(.+)$/i.exec(part);
+        if (match) return $b12f2aed45a388f4$var$unquote(match[1]).trim();
+    }
+    return "";
+}
+function $b12f2aed45a388f4$var$coordinateMacroManifest(scope, boardId) {
+    const authoredObjects = $b12f2aed45a388f4$var$COORDINATE_AUTHORED_MARKERS.flatMap((definition)=>$b12f2aed45a388f4$var$markersForBoard(scope, definition.selector, definition.prefix, boardId).map((entry)=>({
+                ...entry,
+                macroKind: definition.macroKind,
+                renderer: definition.renderer,
+                renderMode: definition.renderMode,
+                ...definition.dgsKeyPrefix ? {
+                    dgsKeyPrefix: definition.dgsKeyPrefix(entry.uid)
+                } : {}
+            })));
+    const staticPoints = authoredObjects.filter((entry)=>entry.macroKind === "point").map((entry)=>({
+            ...entry,
+            name: $b12f2aed45a388f4$export$dfb174ecaac7c7a1(entry.spec, entry.uid).names[0] ?? ""
+        }));
+    const tables = Array.from(scope.querySelectorAll("[id^='lia-table-'][data-spec]")).map((node)=>$b12f2aed45a388f4$var$marker(node, "lia-table-")).filter((entry)=>entry !== undefined && $b12f2aed45a388f4$var$tableBoardId(entry.spec) === boardId);
+    return {
+        dgs: $b12f2aed45a388f4$var$markersForBoard(scope, "[id^='dgs-ui-'][data-spec]", "dgs-ui-", boardId),
+        dgsInstruments: $b12f2aed45a388f4$var$markersForBoard(scope, "[id^='dgs-instrument-ui-'][data-spec][data-instrument]", "dgs-instrument-ui-", boardId),
+        schar: $b12f2aed45a388f4$var$markersForBoard(scope, "[id^='schar-spec-'][data-spec]", "schar-spec-", boardId, 3),
+        regression: $b12f2aed45a388f4$var$markersForBoard(scope, "[id^='regression-ui-'][data-spec]", "regression-ui-", boardId),
+        sliders: $b12f2aed45a388f4$var$markersForBoard(scope, "[id^='slider-spec-'][data-spec]", "slider-spec-", boardId),
+        tables: tables,
+        plotInputs: $b12f2aed45a388f4$var$markersForBoard(scope, "[id^='lia-plot-input-'][data-spec]", "lia-plot-input-", boardId),
+        staticPoints: staticPoints,
+        authoredObjects: authoredObjects
+    };
+}
+function $b12f2aed45a388f4$var$invokeMacroRenderer(runtime, name, args) {
+    const renderer = runtime.globals[name];
+    if (typeof renderer === "function") Reflect.apply(renderer, runtime.view, args);
+}
+function $b12f2aed45a388f4$var$prepareCoordinateMacroBoard(runtime, manifest) {
+    for (const entry of manifest.authoredObjects){
+        const args = [
+            entry.uid,
+            entry.spec
+        ];
+        if (entry.renderMode === "kind-language") args.push(String(entry.node.dataset.kind ?? ""));
+        if (entry.renderMode !== "plain") args.push(entry.language);
+        $b12f2aed45a388f4$var$invokeMacroRenderer(runtime, entry.renderer, args);
+    }
+    for (const entry of manifest.schar)$b12f2aed45a388f4$var$invokeMacroRenderer(runtime, "renderScharFromSpec", [
+        entry.uid,
+        entry.spec
+    ]);
+    for (const entry of manifest.sliders)$b12f2aed45a388f4$var$invokeMacroRenderer(runtime, "renderSliderFromSpec", [
+        entry.uid,
+        entry.spec,
+        entry.language
+    ]);
+    for (const entry of manifest.tables)$b12f2aed45a388f4$var$invokeMacroRenderer(runtime, "renderTableFromSpec", [
+        entry.uid,
+        entry.spec,
+        false
+    ]);
+    for (const entry of manifest.plotInputs)$b12f2aed45a388f4$var$invokeMacroRenderer(runtime, "renderPlotInputFromSpec", [
+        entry.uid,
+        entry.spec
+    ]);
+    for (const entry of manifest.regression)$b12f2aed45a388f4$var$invokeMacroRenderer(runtime, "__setupRegressionUI", [
+        entry.uid,
+        entry.spec,
+        entry.language
+    ]);
+    for (const entry of manifest.dgs)$b12f2aed45a388f4$var$invokeMacroRenderer(runtime, "__setupDGS", [
+        entry.uid,
+        entry.spec,
+        entry.language
+    ]);
+    for (const entry of manifest.dgsInstruments)$b12f2aed45a388f4$var$invokeMacroRenderer(runtime, "__setupDGSInstrument", [
+        entry.uid,
+        entry.spec,
+        String(entry.node.dataset.instrument ?? ""),
+        entry.language
+    ]);
+}
+function $b12f2aed45a388f4$var$assertExclusiveCoordinateBoard(descriptor, scope) {
+    const boardId = $b12f2aed45a388f4$var$descriptorBoardId(descriptor);
+    const owners = $b12f2aed45a388f4$var$descriptorsInScope(scope).filter((candidate)=>$b12f2aed45a388f4$var$descriptorBoardId(candidate) === boardId);
+    if (owners.length !== 1 || owners[0].quiz !== descriptor.quiz) throw new Error("Ein vollst\xe4ndiger Coordinate-Reset ben\xf6tigt genau ein Quiz pro Board-ID.");
+}
+function $b12f2aed45a388f4$export$4354d7a303aac702(quiz, scope) {
     const descriptor = $b12f2aed45a388f4$var$descriptorForQuiz(quiz, scope);
     if (!descriptor) return undefined;
+    $b12f2aed45a388f4$var$assertExclusiveCoordinateBoard(descriptor, scope);
+    const boardId = $b12f2aed45a388f4$var$descriptorBoardId(descriptor);
+    const runtime = "target" in descriptor ? $b12f2aed45a388f4$var$coordinateRuntime(descriptor.target, scope.ownerDocument) : $b12f2aed45a388f4$var$coordinateRuntimeForBoard(boardId, undefined, scope.ownerDocument);
+    const manifest = $b12f2aed45a388f4$var$coordinateMacroManifest(scope, boardId);
+    $b12f2aed45a388f4$var$prepareCoordinateMacroBoard(runtime, manifest);
+    const requiresDgs = manifest.dgs.length > 0 || manifest.dgsInstruments.length > 0;
+    const requirements = {
+        requireDgs: requiresDgs,
+        requireRegression: descriptor.kind === "reconstruction" || requiresDgs || manifest.regression.length > 0,
+        scharUids: manifest.schar.map((entry)=>entry.uid),
+        sliderUids: manifest.sliders.map((entry)=>entry.uid),
+        tableUids: manifest.tables.map((entry)=>entry.uid),
+        plotInputUids: manifest.plotInputs.map((entry)=>entry.uid),
+        pointNames: manifest.staticPoints.map((entry)=>entry.name).filter(Boolean),
+        dgsMacroKeys: requiresDgs ? manifest.staticPoints.map((entry)=>`macro:point:${entry.uid}`) : [],
+        dgsMacroKeyPrefixes: requiresDgs ? [
+            ...manifest.authoredObjects.flatMap((entry)=>entry.dgsKeyPrefix ? [
+                    entry.dgsKeyPrefix
+                ] : []),
+            ...manifest.sliders.map((entry)=>`macro:sliderEntries:slider-${entry.uid}:slider`)
+        ] : []
+    };
+    return (0, $e8fdc675c2832d65$export$da3df4c9ca93b4c9)(runtime, boardId, requirements);
+}
+function $b12f2aed45a388f4$export$460fc343ed462d7(quiz, scope) {
+    const descriptor = $b12f2aed45a388f4$var$descriptorForQuiz(quiz, scope);
+    if (!descriptor) return false;
+    $b12f2aed45a388f4$var$assertExclusiveCoordinateBoard(descriptor, scope);
+    return true;
+}
+function $b12f2aed45a388f4$export$600f4df0dfffcf65(quiz, scope, blocked) {
+    const previous = $b12f2aed45a388f4$var$coordinateCaptureInteraction.get(quiz);
+    if (!blocked) {
+        if (!previous) return false;
+        for (const state of previous){
+            state.element.inert = state.inert;
+            state.element.style.pointerEvents = state.pointerEvents;
+            if (state.ariaBusy === null) state.element.removeAttribute("aria-busy");
+            else state.element.setAttribute("aria-busy", state.ariaBusy);
+        }
+        $b12f2aed45a388f4$var$coordinateCaptureInteraction.delete(quiz);
+        return true;
+    }
+    if (previous) return true;
+    const descriptor = $b12f2aed45a388f4$var$descriptorForQuiz(quiz, scope);
+    if (!descriptor) return false;
+    const boardId = $b12f2aed45a388f4$var$descriptorBoardId(descriptor);
+    const runtime = "target" in descriptor ? $b12f2aed45a388f4$var$coordinateRuntime(descriptor.target, scope.ownerDocument) : $b12f2aed45a388f4$var$coordinateRuntimeForBoard(boardId, undefined, scope.ownerDocument);
+    const elements = [
+        quiz,
+        runtime.board.containerObj
+    ].filter((element)=>element instanceof HTMLElement);
+    const unique = elements.filter((element, index)=>elements.indexOf(element) === index);
+    $b12f2aed45a388f4$var$coordinateCaptureInteraction.set(quiz, unique.map((element)=>({
+            element: element,
+            inert: element.inert,
+            pointerEvents: element.style.pointerEvents,
+            ariaBusy: element.getAttribute("aria-busy")
+        })));
+    for (const element of unique){
+        element.inert = true;
+        element.style.pointerEvents = "none";
+        element.setAttribute("aria-busy", "true");
+    }
+    return true;
+}
+function $b12f2aed45a388f4$export$f3ea75d78bf3c9ee(quiz, scope, macroState) {
+    const descriptor = $b12f2aed45a388f4$var$descriptorForQuiz(quiz, scope);
+    if (!descriptor) return undefined;
+    $b12f2aed45a388f4$var$assertExclusiveCoordinateBoard(descriptor, scope);
+    const boardId = $b12f2aed45a388f4$var$descriptorBoardId(descriptor);
+    if (!macroState || macroState.boardId !== boardId) throw new Error("Der unver\xe4nderte lia-coordinate-Makrozustand wurde vor der Interaktion nicht erfasst.");
     if (!("target" in descriptor)) {
         const runtime = $b12f2aed45a388f4$var$coordinateRuntimeForBoard(descriptor.boardId, undefined, scope.ownerDocument);
         return {
@@ -2880,8 +4230,7 @@ function $b12f2aed45a388f4$export$f3ea75d78bf3c9ee(quiz, scope) {
             boardId: descriptor.boardId,
             scope: scope,
             runtime: runtime,
-            retainedBoardObjects: $b12f2aed45a388f4$var$liveBoardObjects(runtime.board),
-            reconstructionState: descriptor.kind === "reconstruction" ? $b12f2aed45a388f4$var$reconstructionStateSnapshot(runtime.globals, descriptor.boardId) : undefined
+            macroState: macroState
         };
     }
     const descriptors = $b12f2aed45a388f4$var$descriptorsInScope(scope);
@@ -2895,7 +4244,6 @@ function $b12f2aed45a388f4$export$f3ea75d78bf3c9ee(quiz, scope) {
     const runtime = $b12f2aed45a388f4$var$coordinateRuntime(descriptor.target, scope.ownerDocument);
     $b12f2aed45a388f4$var$preflightOwnedObjects(runtime, descriptor.target);
     const owned = $b12f2aed45a388f4$var$ownedBoardObjects(runtime, descriptor.target);
-    const retainedBoardObjects = $b12f2aed45a388f4$var$liveBoardObjects(runtime.board).filter((object)=>!owned.has(object));
     return {
         mode: "point",
         kind: descriptor.kind,
@@ -2906,41 +4254,70 @@ function $b12f2aed45a388f4$export$f3ea75d78bf3c9ee(quiz, scope) {
         siblings: siblings,
         ownership: ownership,
         runtime: runtime,
+        macroState: macroState,
         siblingSnapshot: $b12f2aed45a388f4$var$siblingSnapshot(runtime.state, siblings),
-        retainedBoardObjects: retainedBoardObjects,
         initiallyOwnedBoardObjects: Array.from(owned),
         removedObjects: new Set()
     };
+}
+function $b12f2aed45a388f4$var$rebootstrapPassiveCoordinateQuiz(context) {
+    if (context.kind !== "reconstruction") return;
+    const runtime = $b12f2aed45a388f4$var$currentPassiveRuntime(context);
+    for (const name of [
+        "__setupReconstructionQuiz",
+        "__setupRekonstruktionQuiz"
+    ]){
+        const setup = runtime.globals[name];
+        if (typeof setup !== "function") continue;
+        Reflect.apply(setup, runtime.view, [
+            context.uid,
+            context.spec
+        ]);
+        return;
+    }
 }
 async function $b12f2aed45a388f4$export$f53984a5903c9a74(context, quiz) {
     const descriptor = $b12f2aed45a388f4$var$liveDescriptor(context);
     if (quiz.isConnected && descriptor.quiz !== quiz) throw new Error("Das lia-coordinate-Quiz stimmt nicht mit dem Core-Ziel \xfcberein.");
     if (!$b12f2aed45a388f4$var$coreIsOpen(descriptor.quiz)) throw new Error("Der lia-coordinate-Core-Zustand wurde nicht ge\xf6ffnet.");
     if (context.mode === "passive") {
-        // These quizzes inspect a deliberately shared DGS/Schar/Regression board.
-        // Only LiaScript's own Generic state belongs exclusively to this quiz.
+        (0, $e8fdc675c2832d65$export$2d18c31e31bdc61c)($b12f2aed45a388f4$var$currentPassiveRuntime(context), context.macroState);
+        $b12f2aed45a388f4$var$rebootstrapPassiveCoordinateQuiz(context);
+        await $b12f2aed45a388f4$var$waitForCoordinateSettle();
+        (0, $e8fdc675c2832d65$export$2d18c31e31bdc61c)($b12f2aed45a388f4$var$currentPassiveRuntime(context), context.macroState, {
+            applyDgs: false
+        });
+        $b12f2aed45a388f4$var$rebootstrapPassiveCoordinateQuiz(context);
+        await $b12f2aed45a388f4$var$waitForCoordinateSettle();
+        // Proposal retries macro/DGS restores at 120, 160, 360 and 700 ms.
+        await new Promise((resolve)=>window.setTimeout(resolve, 1260));
+        (0, $e8fdc675c2832d65$export$2d18c31e31bdc61c)($b12f2aed45a388f4$var$currentPassiveRuntime(context), context.macroState, {
+            applyDgs: false
+        });
+        $b12f2aed45a388f4$var$rebootstrapPassiveCoordinateQuiz(context);
         await $b12f2aed45a388f4$var$waitForCoordinateSettle();
         const settled = $b12f2aed45a388f4$var$liveDescriptor(context);
         if (!$b12f2aed45a388f4$var$coreIsOpen(settled.quiz)) throw new Error("Der passive lia-coordinate-Quizzustand blieb nicht ge\xf6ffnet.");
         const runtime = $b12f2aed45a388f4$var$currentPassiveRuntime(context);
-        const currentObjects = new Set($b12f2aed45a388f4$var$liveBoardObjects(runtime.board));
-        const reconstructionPreserved = context.kind === "reconstruction" && currentObjects.size === context.retainedBoardObjects.length && context.reconstructionState === $b12f2aed45a388f4$var$reconstructionStateSnapshot(runtime.globals, context.boardId);
-        const sharedObjectsPreserved = context.kind !== "reconstruction" && context.retainedBoardObjects.every((object)=>currentObjects.has(object));
-        if (!reconstructionPreserved && !sharedObjectsPreserved) throw new Error("Der geteilte lia-coordinate-Boardzustand wurde beim Einzelreset ver\xe4ndert.");
+        const mismatch = (0, $e8fdc675c2832d65$export$470856610dfec380)(runtime, context.macroState);
+        if (mismatch) throw new Error(`Das lia-coordinate-Board entspricht nach dem Reset nicht seinem Makrozustand${mismatch ? ` (${mismatch})` : ""}.`);
         return;
     }
     $b12f2aed45a388f4$var$applyPointReset(context);
+    (0, $e8fdc675c2832d65$export$2d18c31e31bdc61c)($b12f2aed45a388f4$var$currentRuntime(context), context.macroState);
     await $b12f2aed45a388f4$var$waitForCoordinateSettle();
     $b12f2aed45a388f4$var$applyPointReset(context);
+    (0, $e8fdc675c2832d65$export$2d18c31e31bdc61c)($b12f2aed45a388f4$var$currentRuntime(context), context.macroState, {
+        applyDgs: false
+    });
     await $b12f2aed45a388f4$var$waitForCoordinateSettle();
-    if (context.kind === "create-point") {
-        // Proposal may retry a DGS restore after 160 + 360 + 700 ms. Wait past
-        // that complete chain, remove a possibly restored macro point once more,
-        // then also outwait the render helper's own 120-ms retry.
-        await new Promise((resolve)=>window.setTimeout(resolve, 1260));
-        $b12f2aed45a388f4$var$applyPointReset(context);
-        await $b12f2aed45a388f4$var$waitForCoordinateSettle();
-    }
+    // Outwait Proposal's complete delayed macro/DGS restore chain.
+    await new Promise((resolve)=>window.setTimeout(resolve, 1260));
+    $b12f2aed45a388f4$var$applyPointReset(context);
+    (0, $e8fdc675c2832d65$export$2d18c31e31bdc61c)($b12f2aed45a388f4$var$currentRuntime(context), context.macroState, {
+        applyDgs: false
+    });
+    await $b12f2aed45a388f4$var$waitForCoordinateSettle();
     $b12f2aed45a388f4$var$verifyPointReset(context);
 }
 
@@ -3207,6 +4584,9 @@ const $d415641d0cfd8c85$var$buttonToLocator = new WeakMap();
 const $d415641d0cfd8c85$var$activeResetIds = new Set();
 const $d415641d0cfd8c85$var$feedbackGeneration = new Map();
 const $d415641d0cfd8c85$var$pendingResetById = new Map();
+const $d415641d0cfd8c85$var$coordinateMacroStateByResetId = new Map();
+const $d415641d0cfd8c85$var$coordinateCaptureRetryByResetId = new Map();
+const $d415641d0cfd8c85$var$coordinateCaptureNotBeforeByResetId = new Map();
 let $d415641d0cfd8c85$var$anchorCounter = 0;
 let $d415641d0cfd8c85$var$observer;
 let $d415641d0cfd8c85$var$scanScheduled = false;
@@ -3329,11 +4709,86 @@ function $d415641d0cfd8c85$var$resetIdForAnchor(anchor, quiz) {
     anchor.dataset.liaResetterId = anchorId;
     return anchorId;
 }
+function $d415641d0cfd8c85$var$clearCoordinateCaptureRetry(resetId) {
+    const timer = $d415641d0cfd8c85$var$coordinateCaptureRetryByResetId.get(resetId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    $d415641d0cfd8c85$var$coordinateCaptureRetryByResetId.delete(resetId);
+}
+function $d415641d0cfd8c85$var$scheduleCoordinateCaptureRetry(resetId, button) {
+    if ($d415641d0cfd8c85$var$coordinateCaptureRetryByResetId.has(resetId)) return;
+    const timer = window.setTimeout(()=>{
+        $d415641d0cfd8c85$var$coordinateCaptureRetryByResetId.delete(resetId);
+        if (button.isConnected) $d415641d0cfd8c85$var$scheduleScan();
+    }, 160);
+    $d415641d0cfd8c85$var$coordinateCaptureRetryByResetId.set(resetId, timer);
+}
+function $d415641d0cfd8c85$var$setCoordinateCapturePending(button, message, permanent) {
+    button.dataset.liaCoordinateCapturePending = "true";
+    button.disabled = true;
+    button.setAttribute("aria-disabled", "true");
+    button.title = message;
+    button.value = permanent ? "Reset nicht verf\xfcgbar" : "Reset wird vorbereitet \u2026";
+}
+function $d415641d0cfd8c85$var$releaseCoordinateCapturePending(button, resetId) {
+    if (button.dataset.liaCoordinateCapturePending !== "true") return;
+    delete button.dataset.liaCoordinateCapturePending;
+    button.removeAttribute("aria-disabled");
+    button.removeAttribute("title");
+    if (!$d415641d0cfd8c85$var$activeResetIds.has(resetId) && !$d415641d0cfd8c85$var$pendingResetById.has(resetId)) {
+        button.disabled = false;
+        button.value = "Reset";
+    }
+}
 function $d415641d0cfd8c85$var$onHostBind({ anchor: anchor, quiz: quiz, button: button, resetId: resetId }) {
     $d415641d0cfd8c85$var$anchorToQuiz.set(anchor, quiz);
     $d415641d0cfd8c85$var$buttonToQuiz.set(button, quiz);
     const locator = $d415641d0cfd8c85$var$locatorForQuiz(quiz);
     if (locator) $d415641d0cfd8c85$var$buttonToLocator.set(button, locator);
+    const scope = quiz.closest("main.lia-slide__content");
+    if (scope) try {
+        let isCoordinate = false;
+        if (!$d415641d0cfd8c85$var$coordinateMacroStateByResetId.has(resetId)) {
+            isCoordinate = (0, $b12f2aed45a388f4$export$460fc343ed462d7)(quiz, scope);
+            if (isCoordinate) {
+                const now = Date.now();
+                const notBefore = $d415641d0cfd8c85$var$coordinateCaptureNotBeforeByResetId.get(resetId);
+                if (notBefore === undefined) {
+                    $d415641d0cfd8c85$var$coordinateCaptureNotBeforeByResetId.set(resetId, now + 260);
+                    (0, $b12f2aed45a388f4$export$600f4df0dfffcf65)(quiz, scope, true);
+                    $d415641d0cfd8c85$var$setCoordinateCapturePending(button, "Der Coordinate-Makrozustand wird vollst\xe4ndig aufgebaut.", false);
+                    $d415641d0cfd8c85$var$scheduleCoordinateCaptureRetry(resetId, button);
+                } else if (now < notBefore) {
+                    (0, $b12f2aed45a388f4$export$600f4df0dfffcf65)(quiz, scope, true);
+                    $d415641d0cfd8c85$var$setCoordinateCapturePending(button, "Der Coordinate-Makrozustand wird vollst\xe4ndig aufgebaut.", false);
+                    $d415641d0cfd8c85$var$scheduleCoordinateCaptureRetry(resetId, button);
+                } else {
+                    const macroState = (0, $b12f2aed45a388f4$export$4354d7a303aac702)(quiz, scope);
+                    if (macroState) {
+                        $d415641d0cfd8c85$var$coordinateMacroStateByResetId.set(resetId, macroState);
+                        $d415641d0cfd8c85$var$coordinateCaptureNotBeforeByResetId.delete(resetId);
+                    }
+                }
+            }
+        } else isCoordinate = (0, $b12f2aed45a388f4$export$460fc343ed462d7)(quiz, scope);
+        if (isCoordinate && $d415641d0cfd8c85$var$coordinateMacroStateByResetId.has(resetId)) {
+            (0, $b12f2aed45a388f4$export$600f4df0dfffcf65)(quiz, scope, false);
+            $d415641d0cfd8c85$var$clearCoordinateCaptureRetry(resetId);
+            $d415641d0cfd8c85$var$releaseCoordinateCapturePending(button, resetId);
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const permanent = message.includes("genau ein Quiz pro Board-ID");
+        if (permanent) try {
+            (0, $b12f2aed45a388f4$export$600f4df0dfffcf65)(quiz, scope, false);
+        } catch  {
+        // Keep the original configuration error visible on the button.
+        }
+        $d415641d0cfd8c85$var$setCoordinateCapturePending(button, message, permanent);
+        if (permanent) {
+            $d415641d0cfd8c85$var$coordinateCaptureNotBeforeByResetId.delete(resetId);
+            $d415641d0cfd8c85$var$clearCoordinateCaptureRetry(resetId);
+        } else $d415641d0cfd8c85$var$scheduleCoordinateCaptureRetry(resetId, button);
+    }
     if ($d415641d0cfd8c85$var$activeResetIds.has(resetId) || $d415641d0cfd8c85$var$pendingResetById.has(resetId)) {
         button.disabled = true;
         button.setAttribute("aria-busy", "true");
@@ -3341,11 +4796,21 @@ function $d415641d0cfd8c85$var$onHostBind({ anchor: anchor, quiz: quiz, button: 
     }
 }
 function $d415641d0cfd8c85$var$onHostUnbind({ anchor: anchor, quiz: quiz, button: button, resetId: resetId }) {
+    const scope = quiz.closest("main.lia-slide__content");
+    if (scope) try {
+        (0, $b12f2aed45a388f4$export$600f4df0dfffcf65)(quiz, scope, false);
+    } catch  {
+    // A disconnected Coordinate board has no remaining interaction to free.
+    }
     if ($d415641d0cfd8c85$var$anchorToQuiz.get(anchor) === quiz) $d415641d0cfd8c85$var$anchorToQuiz.delete(anchor);
     if ($d415641d0cfd8c85$var$buttonToQuiz.get(button) === quiz) $d415641d0cfd8c85$var$buttonToQuiz.delete(button);
     if (!$d415641d0cfd8c85$var$activeResetIds.has(resetId) && !$d415641d0cfd8c85$var$pendingResetById.has(resetId)) {
         $d415641d0cfd8c85$var$buttonToLocator.delete(button);
         $d415641d0cfd8c85$var$feedbackGeneration.delete(resetId);
+    }
+    if (!button.isConnected) {
+        $d415641d0cfd8c85$var$coordinateCaptureNotBeforeByResetId.delete(resetId);
+        $d415641d0cfd8c85$var$clearCoordinateCaptureRetry(resetId);
     }
 }
 const $d415641d0cfd8c85$var$hostController = new (0, $63cdcaca7b8632ba$export$43b721cd1807b1cc)({
@@ -3509,7 +4974,9 @@ async function $d415641d0cfd8c85$var$performReset(button) {
     const orthographyContext = (0, $40737b7af5fc30de$export$ddfd56e8b3ecba99)(quiz, scope);
     const matheContext = (0, $432c4e666928c735$export$c38681f72a18b03a)(quiz, scope);
     const markerContext = (0, $e918c11cf6e47267$export$c631648e521aca14)(quiz, scope);
-    const coordinateContext = (0, $b12f2aed45a388f4$export$f3ea75d78bf3c9ee)(quiz, scope);
+    const coordinateResetId = button.dataset.liaResetterAnchor;
+    const coordinateMacroState = coordinateResetId ? $d415641d0cfd8c85$var$coordinateMacroStateByResetId.get(coordinateResetId) : undefined;
+    const coordinateContext = (0, $b12f2aed45a388f4$export$f3ea75d78bf3c9ee)(quiz, scope, coordinateMacroState);
     const sectionId = $d415641d0cfd8c85$var$readSectionId(quiz);
     const quizzes = $d415641d0cfd8c85$var$nativeQuizzes(scope);
     const nativeReset = await (0, $3c7ccc4e179fe4df$export$1c2dd9ab0f322592)(sectionId);

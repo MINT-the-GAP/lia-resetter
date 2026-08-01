@@ -1,3 +1,10 @@
+import {
+  captureCoordinateMacroState,
+  coordinateMacroStateMismatch,
+  restoreCoordinateMacroState,
+  type CoordinateMacroState,
+} from "./coordinate-macro-state.ts";
+
 type CoordinatePointKind =
   | "create-point"
   | "point-on-graph"
@@ -29,6 +36,7 @@ interface CoordinateRegistryState {
 }
 
 interface CoordinateBoard extends Record<string, unknown> {
+  containerObj?: HTMLElement;
   objects?: Record<string, unknown>;
   removeObject(object: unknown): unknown;
   update?: () => unknown;
@@ -77,8 +85,8 @@ interface CoordinatePointResetContext {
   readonly siblings: readonly CoordinatePointTarget[];
   readonly ownership: readonly CoordinatePointTarget[];
   readonly runtime: CoordinateRuntime;
+  readonly macroState: CoordinateMacroState;
   readonly siblingSnapshot: readonly SnapshotSlot[];
-  readonly retainedBoardObjects: readonly object[];
   readonly initiallyOwnedBoardObjects: readonly object[];
   readonly removedObjects: Set<object>;
 }
@@ -91,8 +99,7 @@ interface CoordinatePassiveResetContext {
   readonly boardId: string;
   readonly scope: HTMLElement;
   readonly runtime: CoordinateRuntime;
-  readonly retainedBoardObjects: readonly object[];
-  readonly reconstructionState?: string;
+  readonly macroState: CoordinateMacroState;
 }
 
 type CoordinateResetContext =
@@ -101,6 +108,15 @@ type CoordinateResetContext =
 
 const GENERIC_QUIZ_SELECTOR = ".lia-quiz.lia-quiz-generic";
 const FOLLOWING = 4;
+const coordinateCaptureInteraction = new WeakMap<
+  HTMLElement,
+  readonly Readonly<{
+    element: HTMLElement;
+    inert: boolean;
+    pointerEvents: string;
+    ariaBusy: string | null;
+  }>[]
+>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -861,88 +877,6 @@ function serializable(value: unknown): string {
   }
 }
 
-const REGRESSION_ANALYSIS_LISTS = [
-  "analysisEntries",
-  "quadraticAnalysisEntries",
-  "cubicAnalysisEntries",
-  "quarticAnalysisEntries",
-  "sinAnalysisEntries",
-  "expAnalysisEntries",
-  "logAnalysisEntries",
-  "sqrtAnalysisEntries",
-  "hyperbolaAnalysisEntries",
-  "hyperbola2AnalysisEntries",
-] as const;
-
-function reconstructionStateSnapshot(
-  globals: Record<string, unknown>,
-  boardId: string,
-): string {
-  const scharStore = isRecord(globals.__liaScharStateStore)
-    ? Object.fromEntries(
-        Object.entries(globals.__liaScharStateStore)
-          .filter(([key]) => key.endsWith(`::${boardId}`))
-          .sort(([left], [right]) => left.localeCompare(right)),
-      )
-    : {};
-  const scharEntries = isRecord(globals.__scharEntries)
-    ? Object.entries(globals.__scharEntries)
-        .filter(([, value]) => isRecord(value) && value.boardId === boardId)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, value]) => {
-          const entry = value as Record<string, unknown>;
-          return {
-            key,
-            uid: entry.uid,
-            boardId: entry.boardId,
-            params: entry.params,
-            values: entry.values,
-            panelScale: entry.panelScale,
-            panelMinimized: entry.panelMinimized,
-            termVisible: entry.termVisible,
-          };
-        })
-    : [];
-  const regressionStates = isRecord(globals.__liaRegressionStates)
-    ? Object.entries(globals.__liaRegressionStates)
-        .filter(([, value]) => isRecord(value) && value.boardId === boardId)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, value]) => {
-          const state = value as Record<string, unknown>;
-          return {
-            key,
-            uid: state.uid,
-            boardId: state.boardId,
-            drawColor: state.drawColor,
-            activeTool: state.activeTool,
-            regressionMode: state.regressionMode,
-            strokes: state.strokes,
-            regressionPoints: state.regressionPoints,
-            autoCreatedPointsData: state.autoCreatedPointsData,
-            analyses: REGRESSION_ANALYSIS_LISTS.map((list) => ({
-              list,
-              entries: Array.isArray(state[list])
-                ? state[list].map((value) => {
-                    if (!isRecord(value)) return value;
-                    return {
-                      id: value.id,
-                      title: value.title,
-                      color: value.color,
-                      classKey: value.classKey,
-                      model: value.model,
-                      classProbabilities: value.classProbabilities,
-                      linkedModels: value.linkedModels,
-                    };
-                  })
-                : [],
-            })),
-          };
-        })
-    : [];
-
-  return serializable({ scharStore, scharEntries, regressionStates });
-}
-
 function captureSlot(
   result: SnapshotSlot[],
   container: Record<string, unknown> | undefined,
@@ -1381,7 +1315,6 @@ function verifyPointReset(context: CoordinatePointResetContext): void {
   }
   const currentObjects = new Set(liveBoardObjects(runtime.board));
   if (
-    context.retainedBoardObjects.some((object) => !currentObjects.has(object)) ||
     context.initiallyOwnedBoardObjects.some((object) => currentObjects.has(object)) ||
     Array.from(context.removedObjects).some((object) => currentObjects.has(object))
   ) {
@@ -1392,6 +1325,12 @@ function verifyPointReset(context: CoordinatePointResetContext): void {
   if (!verifySnapshot(context.siblingSnapshot)) {
     throw new Error(
       "Beim lia-coordinate-Reset wurde ein anderes Koordinatenquiz verändert.",
+    );
+  }
+  const mismatch = coordinateMacroStateMismatch(runtime, context.macroState);
+  if (mismatch) {
+    throw new Error(
+      `Das lia-coordinate-Board entspricht nach dem Reset nicht seinem Makrozustand${mismatch ? ` (${mismatch})` : ""}.`,
     );
   }
   const place = placementButton(descriptor, context.scope);
@@ -1423,16 +1362,494 @@ function waitForAnimationFrame(): Promise<void> {
 
 async function waitForCoordinateSettle(): Promise<void> {
   await waitForAnimationFrame();
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 180));
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 260));
   await waitForAnimationFrame();
+}
+
+function descriptorBoardId(descriptor: CoordinateDescriptor): string {
+  return "target" in descriptor
+    ? descriptor.target.boardId
+    : descriptor.boardId;
+}
+
+interface CoordinateMacroMarker {
+  readonly node: HTMLElement;
+  readonly uid: string;
+  readonly spec: string;
+  readonly language: string;
+}
+
+interface CoordinateStaticPointMarker extends CoordinateMacroMarker {
+  readonly name: string;
+}
+
+type CoordinateMacroRenderMode = "plain" | "language" | "kind-language";
+
+interface CoordinateAuthoredObjectMarker extends CoordinateMacroMarker {
+  readonly macroKind: string;
+  readonly renderer: string;
+  readonly renderMode: CoordinateMacroRenderMode;
+  readonly dgsKeyPrefix?: string;
+}
+
+interface CoordinateMacroManifest {
+  readonly dgs: readonly CoordinateMacroMarker[];
+  readonly dgsInstruments: readonly CoordinateMacroMarker[];
+  readonly schar: readonly CoordinateMacroMarker[];
+  readonly regression: readonly CoordinateMacroMarker[];
+  readonly sliders: readonly CoordinateMacroMarker[];
+  readonly tables: readonly CoordinateMacroMarker[];
+  readonly plotInputs: readonly CoordinateMacroMarker[];
+  readonly staticPoints: readonly CoordinateStaticPointMarker[];
+  readonly authoredObjects: readonly CoordinateAuthoredObjectMarker[];
+}
+
+interface CoordinateAuthoredMarkerDefinition {
+  readonly macroKind: string;
+  readonly selector: string;
+  readonly prefix: string;
+  readonly renderer: string;
+  readonly renderMode: CoordinateMacroRenderMode;
+  readonly dgsKeyPrefix?: (uid: string) => string;
+}
+
+const COORDINATE_AUTHORED_MARKERS: readonly CoordinateAuthoredMarkerDefinition[] = [
+  {
+    macroKind: "point",
+    selector: "[id^='point-spec-'][data-spec]",
+    prefix: "point-spec-",
+    renderer: "renderStaticPointFromSpec",
+    renderMode: "plain",
+    dgsKeyPrefix: (uid) => `macro:point:${uid}`,
+  },
+  {
+    macroKind: "coord-text",
+    selector: ".lia-coord-text-spec[id][data-spec],[id^='coord-text-spec-'][data-spec]",
+    prefix: "coord-text-spec-",
+    renderer: "renderCoordTextFromSpec",
+    renderMode: "plain",
+    dgsKeyPrefix: (uid) => `macro:coordTextEntries:coord-text-${uid}:text`,
+  },
+  {
+    macroKind: "distance",
+    selector: "[id^='distance-spec-'][data-spec]",
+    prefix: "distance-spec-",
+    renderer: "renderDistanceFromSpec",
+    renderMode: "language",
+    dgsKeyPrefix: (uid) => `macro:distanceEntries:distance-${uid}:`,
+  },
+  {
+    macroKind: "linear",
+    selector: "[id^='linear-spec-'][data-spec]",
+    prefix: "linear-spec-",
+    renderer: "renderLinearObjectFromSpec",
+    renderMode: "kind-language",
+    dgsKeyPrefix: (uid) => `macro:linearObjectEntries:linear-${uid}:`,
+  },
+  {
+    macroKind: "arc",
+    selector: "[id^='arc-spec-'][data-spec]",
+    prefix: "arc-spec-",
+    renderer: "renderArcFromSpec",
+    renderMode: "language",
+    dgsKeyPrefix: (uid) => `macro:arcEntries:arc-${uid}:`,
+  },
+  {
+    macroKind: "relation",
+    selector: "[id^='relation-spec-'][data-spec]",
+    prefix: "relation-spec-",
+    renderer: "renderRelationObjectFromSpec",
+    renderMode: "kind-language",
+    dgsKeyPrefix: (uid) => `macro:relationObjectEntries:relation-${uid}:`,
+  },
+  {
+    macroKind: "area",
+    selector: "[id^='area-spec-'][data-spec]",
+    prefix: "area-spec-",
+    renderer: "renderAreaFromSpec",
+    renderMode: "language",
+    dgsKeyPrefix: (uid) => `macro:areaEntries:area-${uid}:`,
+  },
+  {
+    macroKind: "angle",
+    selector: "[id^='angle-spec-'][data-spec]",
+    prefix: "angle-spec-",
+    renderer: "renderAngleFromSpec",
+    renderMode: "language",
+    dgsKeyPrefix: (uid) => `macro:angleEntries:angle-${uid}:angle`,
+  },
+  {
+    macroKind: "circle",
+    selector: "[id^='circle-spec-'][data-spec]",
+    prefix: "circle-spec-",
+    renderer: "renderCircleFromSpec",
+    renderMode: "language",
+    dgsKeyPrefix: (uid) => `macro:circleEntries:circle-${uid}:circle`,
+  },
+  {
+    macroKind: "tangent",
+    selector: "[id^='tangent-spec-'][data-spec]",
+    prefix: "tangent-spec-",
+    renderer: "renderTangentFromSpec",
+    renderMode: "language",
+    dgsKeyPrefix: (uid) => `macro:tangentEntries:tangent-${uid}:`,
+  },
+  {
+    macroKind: "sector",
+    selector: "[id^='sector-spec-'][data-spec]",
+    prefix: "sector-spec-",
+    renderer: "renderCircularSectorFromSpec",
+    renderMode: "language",
+    dgsKeyPrefix: (uid) => `macro:sectorEntries:sector-${uid}:sector`,
+  },
+  {
+    macroKind: "plot",
+    selector: "[id^='plot-spec-'][data-spec]",
+    prefix: "plot-spec-",
+    renderer: "renderPlotFunctionFromSpec",
+    renderMode: "plain",
+    dgsKeyPrefix: (uid) => `macro:plotFunctionEntries:plot-${uid}:graph`,
+  },
+  {
+    macroKind: "function-analysis",
+    selector: "[id^='function-analysis-spec-'][data-spec]",
+    prefix: "function-analysis-spec-",
+    renderer: "renderFunctionAnalysisPointsFromSpec",
+    renderMode: "kind-language",
+  },
+  {
+    macroKind: "object-analysis",
+    selector: "[id^='object-analysis-spec-'][data-spec]",
+    prefix: "object-analysis-spec-",
+    renderer: "renderObjectAnalysisPointsFromSpec",
+    renderMode: "kind-language",
+  },
+];
+
+function markerUid(node: HTMLElement, prefix: string): string {
+  return node.id.startsWith(prefix) ? node.id.slice(prefix.length) : "";
+}
+
+function marker(
+  node: HTMLElement,
+  prefix: string,
+): CoordinateMacroMarker | undefined {
+  const uid = markerUid(node, prefix);
+  const spec = String(node.dataset.spec ?? "").trim();
+  return uid && spec
+    ? {
+        node,
+        uid,
+        spec,
+        language: String(node.dataset.language ?? "de"),
+      }
+    : undefined;
+}
+
+function markersForBoard(
+  scope: HTMLElement,
+  selector: string,
+  prefix: string,
+  boardId: string,
+  boardPart = 0,
+): CoordinateMacroMarker[] {
+  return Array.from(scope.querySelectorAll<HTMLElement>(selector))
+    .map((node) => marker(node, prefix))
+    .filter(
+      (entry): entry is CoordinateMacroMarker =>
+        entry !== undefined && specParts(entry.spec)[boardPart] === boardId,
+    );
+}
+
+function tableBoardId(spec: string): string {
+  for (const part of specParts(spec).slice(3)) {
+    const match = /^id\s*=\s*(.+)$/i.exec(part);
+    if (match) return unquote(match[1]).trim();
+  }
+  return "";
+}
+
+function coordinateMacroManifest(
+  scope: HTMLElement,
+  boardId: string,
+): CoordinateMacroManifest {
+  const authoredObjects = COORDINATE_AUTHORED_MARKERS.flatMap((definition) =>
+    markersForBoard(
+      scope,
+      definition.selector,
+      definition.prefix,
+      boardId,
+    ).map((entry) => ({
+      ...entry,
+      macroKind: definition.macroKind,
+      renderer: definition.renderer,
+      renderMode: definition.renderMode,
+      ...(definition.dgsKeyPrefix
+        ? { dgsKeyPrefix: definition.dgsKeyPrefix(entry.uid) }
+        : {}),
+    })),
+  );
+  const staticPoints = authoredObjects
+    .filter((entry) => entry.macroKind === "point")
+    .map((entry) => ({
+    ...entry,
+    name: parseCreatePointTarget(entry.spec, entry.uid).names[0] ?? "",
+    }));
+  const tables = Array.from(
+    scope.querySelectorAll<HTMLElement>("[id^='lia-table-'][data-spec]"),
+  )
+    .map((node) => marker(node, "lia-table-"))
+    .filter(
+      (entry): entry is CoordinateMacroMarker =>
+        entry !== undefined && tableBoardId(entry.spec) === boardId,
+    );
+  return {
+    dgs: markersForBoard(
+      scope,
+      "[id^='dgs-ui-'][data-spec]",
+      "dgs-ui-",
+      boardId,
+    ),
+    dgsInstruments: markersForBoard(
+      scope,
+      "[id^='dgs-instrument-ui-'][data-spec][data-instrument]",
+      "dgs-instrument-ui-",
+      boardId,
+    ),
+    schar: markersForBoard(
+      scope,
+      "[id^='schar-spec-'][data-spec]",
+      "schar-spec-",
+      boardId,
+      3,
+    ),
+    regression: markersForBoard(
+      scope,
+      "[id^='regression-ui-'][data-spec]",
+      "regression-ui-",
+      boardId,
+    ),
+    sliders: markersForBoard(
+      scope,
+      "[id^='slider-spec-'][data-spec]",
+      "slider-spec-",
+      boardId,
+    ),
+    tables,
+    plotInputs: markersForBoard(
+      scope,
+      "[id^='lia-plot-input-'][data-spec]",
+      "lia-plot-input-",
+      boardId,
+    ),
+    staticPoints,
+    authoredObjects,
+  };
+}
+
+function invokeMacroRenderer(
+  runtime: CoordinateRuntime,
+  name: string,
+  args: readonly unknown[],
+): void {
+  const renderer = runtime.globals[name];
+  if (typeof renderer === "function") {
+    Reflect.apply(renderer, runtime.view, args);
+  }
+}
+
+function prepareCoordinateMacroBoard(
+  runtime: CoordinateRuntime,
+  manifest: CoordinateMacroManifest,
+): void {
+  for (const entry of manifest.authoredObjects) {
+    const args: unknown[] = [entry.uid, entry.spec];
+    if (entry.renderMode === "kind-language") {
+      args.push(String(entry.node.dataset.kind ?? ""));
+    }
+    if (entry.renderMode !== "plain") args.push(entry.language);
+    invokeMacroRenderer(runtime, entry.renderer, args);
+  }
+  for (const entry of manifest.schar) {
+    invokeMacroRenderer(runtime, "renderScharFromSpec", [
+      entry.uid,
+      entry.spec,
+    ]);
+  }
+  for (const entry of manifest.sliders) {
+    invokeMacroRenderer(runtime, "renderSliderFromSpec", [
+      entry.uid,
+      entry.spec,
+      entry.language,
+    ]);
+  }
+  for (const entry of manifest.tables) {
+    invokeMacroRenderer(runtime, "renderTableFromSpec", [
+      entry.uid,
+      entry.spec,
+      false,
+    ]);
+  }
+  for (const entry of manifest.plotInputs) {
+    invokeMacroRenderer(runtime, "renderPlotInputFromSpec", [
+      entry.uid,
+      entry.spec,
+    ]);
+  }
+  for (const entry of manifest.regression) {
+    invokeMacroRenderer(runtime, "__setupRegressionUI", [
+      entry.uid,
+      entry.spec,
+      entry.language,
+    ]);
+  }
+  for (const entry of manifest.dgs) {
+    invokeMacroRenderer(runtime, "__setupDGS", [
+      entry.uid,
+      entry.spec,
+      entry.language,
+    ]);
+  }
+  for (const entry of manifest.dgsInstruments) {
+    invokeMacroRenderer(runtime, "__setupDGSInstrument", [
+      entry.uid,
+      entry.spec,
+      String(entry.node.dataset.instrument ?? ""),
+      entry.language,
+    ]);
+  }
+}
+
+function assertExclusiveCoordinateBoard(
+  descriptor: CoordinateDescriptor,
+  scope: HTMLElement,
+): void {
+  const boardId = descriptorBoardId(descriptor);
+  const owners = descriptorsInScope(scope).filter(
+    (candidate) => descriptorBoardId(candidate) === boardId,
+  );
+  if (owners.length !== 1 || owners[0].quiz !== descriptor.quiz) {
+    throw new Error(
+      "Ein vollständiger Coordinate-Reset benötigt genau ein Quiz pro Board-ID.",
+    );
+  }
+}
+
+export function captureCoordinateMacroStateForQuiz(
+  quiz: HTMLElement,
+  scope: HTMLElement,
+): CoordinateMacroState | undefined {
+  const descriptor = descriptorForQuiz(quiz, scope);
+  if (!descriptor) return undefined;
+  assertExclusiveCoordinateBoard(descriptor, scope);
+  const boardId = descriptorBoardId(descriptor);
+  const runtime = "target" in descriptor
+    ? coordinateRuntime(descriptor.target, scope.ownerDocument)
+    : coordinateRuntimeForBoard(boardId, undefined, scope.ownerDocument);
+  const manifest = coordinateMacroManifest(scope, boardId);
+  prepareCoordinateMacroBoard(runtime, manifest);
+  const requiresDgs =
+    manifest.dgs.length > 0 || manifest.dgsInstruments.length > 0;
+  const requirements = {
+    requireDgs: requiresDgs,
+    requireRegression:
+      descriptor.kind === "reconstruction" ||
+      requiresDgs ||
+      manifest.regression.length > 0,
+    scharUids: manifest.schar.map((entry) => entry.uid),
+    sliderUids: manifest.sliders.map((entry) => entry.uid),
+    tableUids: manifest.tables.map((entry) => entry.uid),
+    plotInputUids: manifest.plotInputs.map((entry) => entry.uid),
+    pointNames: manifest.staticPoints.map((entry) => entry.name).filter(Boolean),
+    dgsMacroKeys: requiresDgs
+      ? manifest.staticPoints.map((entry) => `macro:point:${entry.uid}`)
+      : [],
+    dgsMacroKeyPrefixes: requiresDgs
+      ? [
+          ...manifest.authoredObjects.flatMap((entry) =>
+            entry.dgsKeyPrefix ? [entry.dgsKeyPrefix] : [],
+          ),
+          ...manifest.sliders.map(
+            (entry) => `macro:sliderEntries:slider-${entry.uid}:slider`,
+          ),
+        ]
+      : [],
+  };
+  return captureCoordinateMacroState(runtime, boardId, requirements);
+}
+
+export function validateCoordinateResetConfigurationForQuiz(
+  quiz: HTMLElement,
+  scope: HTMLElement,
+): boolean {
+  const descriptor = descriptorForQuiz(quiz, scope);
+  if (!descriptor) return false;
+  assertExclusiveCoordinateBoard(descriptor, scope);
+  return true;
+}
+
+export function setCoordinateMacroCaptureBlocked(
+  quiz: HTMLElement,
+  scope: HTMLElement,
+  blocked: boolean,
+): boolean {
+  const previous = coordinateCaptureInteraction.get(quiz);
+  if (!blocked) {
+    if (!previous) return false;
+    for (const state of previous) {
+      state.element.inert = state.inert;
+      state.element.style.pointerEvents = state.pointerEvents;
+      if (state.ariaBusy === null) state.element.removeAttribute("aria-busy");
+      else state.element.setAttribute("aria-busy", state.ariaBusy);
+    }
+    coordinateCaptureInteraction.delete(quiz);
+    return true;
+  }
+  if (previous) return true;
+
+  const descriptor = descriptorForQuiz(quiz, scope);
+  if (!descriptor) return false;
+  const boardId = descriptorBoardId(descriptor);
+  const runtime = "target" in descriptor
+    ? coordinateRuntime(descriptor.target, scope.ownerDocument)
+    : coordinateRuntimeForBoard(boardId, undefined, scope.ownerDocument);
+  const elements = [quiz, runtime.board.containerObj].filter(
+    (element): element is HTMLElement => element instanceof HTMLElement,
+  );
+  const unique = elements.filter(
+    (element, index) => elements.indexOf(element) === index,
+  );
+  coordinateCaptureInteraction.set(
+    quiz,
+    unique.map((element) => ({
+      element,
+      inert: element.inert,
+      pointerEvents: element.style.pointerEvents,
+      ariaBusy: element.getAttribute("aria-busy"),
+    })),
+  );
+  for (const element of unique) {
+    element.inert = true;
+    element.style.pointerEvents = "none";
+    element.setAttribute("aria-busy", "true");
+  }
+  return true;
 }
 
 export function captureCoordinateContext(
   quiz: HTMLElement,
   scope: HTMLElement,
+  macroState?: CoordinateMacroState,
 ): CoordinateResetContext | undefined {
   const descriptor = descriptorForQuiz(quiz, scope);
   if (!descriptor) return undefined;
+  assertExclusiveCoordinateBoard(descriptor, scope);
+  const boardId = descriptorBoardId(descriptor);
+  if (!macroState || macroState.boardId !== boardId) {
+    throw new Error(
+      "Der unveränderte lia-coordinate-Makrozustand wurde vor der Interaktion nicht erfasst.",
+    );
+  }
 
   if (!("target" in descriptor)) {
     const runtime = coordinateRuntimeForBoard(
@@ -1448,11 +1865,7 @@ export function captureCoordinateContext(
       boardId: descriptor.boardId,
       scope,
       runtime,
-      retainedBoardObjects: liveBoardObjects(runtime.board),
-      reconstructionState:
-        descriptor.kind === "reconstruction"
-          ? reconstructionStateSnapshot(runtime.globals, descriptor.boardId)
-          : undefined,
+      macroState,
     };
   }
 
@@ -1470,9 +1883,6 @@ export function captureCoordinateContext(
   const runtime = coordinateRuntime(descriptor.target, scope.ownerDocument);
   preflightOwnedObjects(runtime, descriptor.target);
   const owned = ownedBoardObjects(runtime, descriptor.target);
-  const retainedBoardObjects = liveBoardObjects(runtime.board).filter(
-    (object) => !owned.has(object),
-  );
 
   return {
     mode: "point",
@@ -1484,11 +1894,27 @@ export function captureCoordinateContext(
     siblings,
     ownership,
     runtime,
+    macroState,
     siblingSnapshot: siblingSnapshot(runtime.state, siblings),
-    retainedBoardObjects,
     initiallyOwnedBoardObjects: Array.from(owned),
     removedObjects: new Set<object>(),
   };
+}
+
+function rebootstrapPassiveCoordinateQuiz(
+  context: CoordinatePassiveResetContext,
+): void {
+  if (context.kind !== "reconstruction") return;
+  const runtime = currentPassiveRuntime(context);
+  for (const name of [
+    "__setupReconstructionQuiz",
+    "__setupRekonstruktionQuiz",
+  ]) {
+    const setup = runtime.globals[name];
+    if (typeof setup !== "function") continue;
+    Reflect.apply(setup, runtime.view, [context.uid, context.spec]);
+    return;
+  }
 }
 
 export async function resetCoordinateContext(
@@ -1506,8 +1932,24 @@ export async function resetCoordinateContext(
   }
 
   if (context.mode === "passive") {
-    // These quizzes inspect a deliberately shared DGS/Schar/Regression board.
-    // Only LiaScript's own Generic state belongs exclusively to this quiz.
+    restoreCoordinateMacroState(currentPassiveRuntime(context), context.macroState);
+    rebootstrapPassiveCoordinateQuiz(context);
+    await waitForCoordinateSettle();
+    restoreCoordinateMacroState(
+      currentPassiveRuntime(context),
+      context.macroState,
+      { applyDgs: false },
+    );
+    rebootstrapPassiveCoordinateQuiz(context);
+    await waitForCoordinateSettle();
+    // Proposal retries macro/DGS restores at 120, 160, 360 and 700 ms.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 1_260));
+    restoreCoordinateMacroState(
+      currentPassiveRuntime(context),
+      context.macroState,
+      { applyDgs: false },
+    );
+    rebootstrapPassiveCoordinateQuiz(context);
     await waitForCoordinateSettle();
     const settled = liveDescriptor(context);
     if (!coreIsOpen(settled.quiz)) {
@@ -1516,34 +1958,33 @@ export async function resetCoordinateContext(
       );
     }
     const runtime = currentPassiveRuntime(context);
-    const currentObjects = new Set(liveBoardObjects(runtime.board));
-    const reconstructionPreserved =
-      context.kind === "reconstruction" &&
-      currentObjects.size === context.retainedBoardObjects.length &&
-      context.reconstructionState ===
-        reconstructionStateSnapshot(runtime.globals, context.boardId);
-    const sharedObjectsPreserved =
-      context.kind !== "reconstruction" &&
-      context.retainedBoardObjects.every((object) => currentObjects.has(object));
-    if (!reconstructionPreserved && !sharedObjectsPreserved) {
+    const mismatch = coordinateMacroStateMismatch(runtime, context.macroState);
+    if (mismatch) {
       throw new Error(
-        "Der geteilte lia-coordinate-Boardzustand wurde beim Einzelreset verändert.",
+        `Das lia-coordinate-Board entspricht nach dem Reset nicht seinem Makrozustand${mismatch ? ` (${mismatch})` : ""}.`,
       );
     }
     return;
   }
 
   applyPointReset(context);
+  restoreCoordinateMacroState(currentRuntime(context), context.macroState);
   await waitForCoordinateSettle();
   applyPointReset(context);
+  restoreCoordinateMacroState(
+    currentRuntime(context),
+    context.macroState,
+    { applyDgs: false },
+  );
   await waitForCoordinateSettle();
-  if (context.kind === "create-point") {
-    // Proposal may retry a DGS restore after 160 + 360 + 700 ms. Wait past
-    // that complete chain, remove a possibly restored macro point once more,
-    // then also outwait the render helper's own 120-ms retry.
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 1_260));
-    applyPointReset(context);
-    await waitForCoordinateSettle();
-  }
+  // Outwait Proposal's complete delayed macro/DGS restore chain.
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 1_260));
+  applyPointReset(context);
+  restoreCoordinateMacroState(
+    currentRuntime(context),
+    context.macroState,
+    { applyDgs: false },
+  );
+  await waitForCoordinateSettle();
   verifyPointReset(context);
 }
