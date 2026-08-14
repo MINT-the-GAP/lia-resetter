@@ -31,11 +31,11 @@ test("publishes consistent MINT-the-GAP repository and import metadata", () => {
     readme,
     /^repository: https:\/\/github\.com\/MINT-the-GAP\/lia-resetter$/m,
   );
-  assert.match(
+  assert.match(readme, /MINT-the-GAP\/lia-resetter\/main\/README\.md/);
+  assert.doesNotMatch(
     readme,
     /MINT-the-GAP\/lia-resetter\/1\.0\.0\/README\.md/,
   );
-  assert.match(readme, /MINT-the-GAP\/lia-resetter\/main\/README\.md/);
 });
 
 test("ships a self-contained bundle without a missing source map", () => {

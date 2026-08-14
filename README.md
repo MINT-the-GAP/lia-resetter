@@ -20,8 +20,8 @@ import: https://raw.githubusercontent.com/MINT-the-GAP/lia-DynFlex/refs/heads/ma
 
 @resetter: <lia-resetter-host data-lia-resetter></lia-resetter-host>
 
-@Rekonstruktion: @ResetterRekonstruktion_(@uid,`@0`)
-@Reconstruction: @ResetterRekonstruktion_(@uid,`@0`)
+@ResetterRekonstruktion: @ResetterRekonstruktion_(@uid,`@0`)
+@ResetterReconstruction: @ResetterRekonstruktion_(@uid,`@0`)
 
 @ResetterRekonstruktion_
 <span id="rek-spec-@0" data-lia-resetter-spec="@1" style="display:none;"></span>
@@ -123,23 +123,32 @@ Resetter-Knoten in `.lia-quiz__control` oder eine andere von LiaScript/Elm
 verwaltete Kindliste eingefügt. Damit ist der DOM-Patch-Fehler
 `created_by_elm` beim anschließenden Prüfen behoben.
 
-Nach Veröffentlichung des Tags `1.0.0` sollte für stabile Kurse der
-versionsgebundene Import verwendet werden:
+## Schnellstart und Migration
 
-```text
-import: https://raw.githubusercontent.com/MINT-the-GAP/lia-resetter/1.0.0/README.md
-```
+Die generischen Rekonstruktionsnamen gehören im aktuellen Entwicklungsstand
+ausschließlich zu `lia-coordinate`. Bestehende Resetter-Kurse müssen deshalb
+ihre Aufrufe wie folgt migrieren:
 
-Der aktuelle Entwicklungsstand auf `main` ist über diesen Import erreichbar:
+- bisheriges Resetter-`@Rekonstruktion(...)` → `@ResetterRekonstruktion(...)`
+- bisheriges Resetter-`@Reconstruction(...)` → `@ResetterReconstruction(...)`
+- `@Rekonstruktion(...)` und `@Reconstruction(...)` ohne Präfix bezeichnen
+  künftig eindeutig die Coordinate-Makros
+
+Die deutschen und englischen Resetter-Namen delegieren identisch an
+`@ResetterRekonstruktion_`. Direkt nach jedem damit erzeugten, resetbaren
+Rekonstruktionsquiz muss weiterhin `@resetter` stehen.
+
+Der kollisionsfreie Entwicklungsstand bleibt in allen Metadaten bei Version
+`1.0.0` und ist über `main` erreichbar:
 
 ```text
 import: https://raw.githubusercontent.com/MINT-the-GAP/lia-resetter/main/README.md
 ```
 
-Der Tag fixiert den Resetter selbst. Die im Demonstrationskurs verwendeten
-Quiz-Templates werden weiterhin aus ihren angegebenen `main`- beziehungsweise
-`Proposal`-Branches geladen. Wer vollständig reproduzierbare Kurse benötigt,
-muss auch diese direkten Kursimporte auf geprüfte Tags oder Commits festlegen.
+Der bereits bestehende Tag `1.0.0` verweist auf den Stand vor dieser Migration
+und enthält noch die kollidierenden Resetter-Aliase. Er ist deshalb kein
+geeigneter versionsgebundener Import für die neue API. Ein neuer Tag oder ein
+Release ist nicht Bestandteil dieser Änderung.
 
 Diese Demo verwendet die `main`-Variante. Der Resetter unterstützt alternativ
 auch den `Proposal`-Import. In einem Kurs darf genau eine der beiden Varianten
@@ -175,11 +184,11 @@ import: https://raw.githubusercontent.com/MINT-the-GAP/lia-marker/main/README.md
 
 Für die Koordinatenquizze importiert diese Demo `Proposal`, weil nur dort auch
 Umfangs-, Flächen- und Konstruktionsquiz verfügbar sind. Die JSXGraph-
-Abhängigkeit wird bewusst direkt importiert. Das im Dokumentkopf exportierte
-Rekonstruktionsmakro legt den unsichtbaren Coordinate-Hilfsknoten zuerst
-außerhalb von LiaScripts Elm-DOM an und aktiviert erst danach den Upstream-
-Bootstrap. Dafür ist kein zweites, möglicherweise parallel ladendes Prelude
-nötig:
+Abhängigkeit wird bewusst direkt importiert. Die im Dokumentkopf exportierten
+Makros `@ResetterRekonstruktion` und `@ResetterReconstruction` legen den
+unsichtbaren Coordinate-Hilfsknoten zuerst außerhalb von LiaScripts Elm-DOM an
+und aktivieren erst danach den Upstream-Bootstrap. Dafür ist kein zweites,
+möglicherweise parallel ladendes Prelude nötig:
 
 ```text
 import: https://cdn.jsdelivr.net/gh/LiaTemplates/JSXGraph@main/README.md
@@ -238,7 +247,7 @@ ist nicht automatisch Bestandteil von `dist/index.js`.
 | Punkt erzeugen | `@CreatePoint(...)` |
 | Punkt auf Graph | `@PointOnGraph(...)` |
 | Mehrere Punkte auf Graph | `@PointsOnGraph(...)` |
-| Funktionsrekonstruktion | `@Rekonstruktion(...)` |
+| Funktionsrekonstruktion mit Einzelreset | `@ResetterRekonstruktion(...)` oder `@ResetterReconstruction(...)` |
 | Umfang eines Polygons | `@UmfangQuiz(...)` (`Proposal`) |
 | Fläche eines Polygons | `@FlaecheQuiz(...)` (`Proposal`) |
 | Geometrische Konstruktion | `@KonstruktionQuiz(...)` (`Proposal`) |
@@ -529,11 +538,12 @@ Ziehe alle drei Punkte auf den Graphen $g(x)=x-1$.
 
 ## 21. Funktionsrekonstruktion
 
-`@Rekonstruktion` vergleicht eine eingestellte Funktion mit dem Zielterm.
-Der Reset öffnet das Quiz erneut und stellt Schar, Regler, Funktionsgraph und
-Boardausschnitt auf die beim Makroaufbau erfassten Werte zurück. Das vorherige
-LiaScript-Skriptergebnis wird ebenfalls geleert, sodass die Aufgabe wieder
-vollständig im Ausgangszustand vorliegt.
+`@ResetterRekonstruktion` und `@ResetterReconstruction` vergleichen eine
+eingestellte Funktion identisch mit dem Zielterm. Der Reset öffnet das Quiz
+erneut und stellt Schar, Regler, Funktionsgraph und Boardausschnitt auf die beim
+Makroaufbau erfassten Werte zurück. Das vorherige LiaScript-Skriptergebnis wird
+ebenfalls geleert, sodass die Aufgabe wieder vollständig im Ausgangszustand
+vorliegt.
 
 @CoordinateSystem(`xmin=-7;xmax=7;ymin=-5;ymax=5;width=;id=reset_coord_reconstruction`)
 
@@ -543,7 +553,7 @@ vollständig im Ausgangszustand vorliegt.
 
 Stelle die Funktion $f(x)=2x-1$ ein.
 
-@Rekonstruktion(`reset_coord_reconstruction;2x-1;0.1`)
+@ResetterRekonstruktion(`reset_coord_reconstruction;2x-1;0.1`)
 
 @resetter
 
@@ -606,10 +616,27 @@ oder Koordinatenquiz kommt genau eine eigene Zeile:
 @resetter
 ```
 
+Eine resetbare Funktionsrekonstruktion verwendet den eindeutigen Resetter-Namen
+und unmittelbar danach denselben Sidecar:
+
+```text
+@ResetterRekonstruktion(`board-id;2x-1;0.1`)
+
+@resetter
+```
+
+Englisch ist der Ablauf identisch:
+
+```text
+@ResetterReconstruction(`board-id;2x-1;0.1`)
+
+@resetter
+```
+
 
 ## Implementation
 
-Das Makro aus dem Dokumentkopf greift auf das kompilierte Bundle zu. Für
+Die Makros aus dem Dokumentkopf greifen auf das kompilierte Bundle zu. Für
 `lia-kachel` wird genau einer der beiden oben gezeigten Branch-Imports
 verwendet; die Demo aktiviert dort `main`. Für `lia-coordinate` aktiviert sie
 `Proposal`, damit alle sieben Quizfamilien enthalten sind:
@@ -619,6 +646,8 @@ aufgelöst. Deshalb muss `dist/index.js` nach jeder Quell- oder
 Versionsänderung neu gebaut und gemeinsam mit README und Quellen committed
 werden. Die lokale Script-Zeile sollte nicht allein in einen fremden Kurs
 kopiert werden; dafür ist der oben dokumentierte Template-Import vorgesehen.
+Der folgende Block spiegelt dennoch alle Resetter-eigenen öffentlichen Makros
+einschließlich der vollständigen Rekonstruktionsimplementierung konsistent.
 
 ```html
 script: ./dist/index.js
@@ -631,6 +660,83 @@ import: https://cdn.jsdelivr.net/gh/LiaTemplates/JSXGraph@main/README.md
 import: https://raw.githubusercontent.com/MINT-the-GAP/lia-coordinate/Proposal/README.md
 
 @resetter: <lia-resetter-host data-lia-resetter></lia-resetter-host>
+
+@ResetterRekonstruktion: @ResetterRekonstruktion_(@uid,`@0`)
+@ResetterReconstruction: @ResetterRekonstruktion_(@uid,`@0`)
+
+@ResetterRekonstruktion_
+<span id="rek-spec-@0" data-lia-resetter-spec="@1" style="display:none;"></span>
+
+<div id="rek-check-@0">
+[[!]]
+<script modify="false">
+  (() => {
+    // Clears only this LiaScript effect result, so an identical answer after
+    // an individual restore is evaluated and published again.
+    console.clear();
+    const node = document.getElementById('rek-spec-@0');
+    const spec = node
+      ? String(node.dataset.spec || node.dataset.liaResetterSpec || '')
+      : String.raw`@1`;
+
+    if (typeof window.__checkReconstructionQuiz === 'function') {
+      return window.__checkReconstructionQuiz('@0', spec);
+    }
+
+    if (typeof window.__checkRekonstruktionQuiz === 'function') {
+      return window.__checkRekonstruktionQuiz('@0', spec);
+    }
+
+    if (typeof window.__checkReconstructionFromSpec === 'function') {
+      return window.__checkReconstructionFromSpec(spec);
+    }
+
+    if (typeof window.__checkRekonstruktionFromSpec === 'function') {
+      return window.__checkRekonstruktionFromSpec(spec);
+    }
+
+    return false;
+  })()
+</script>
+</div>
+
+<script modify="false">
+(function(){
+  const node = document.getElementById('rek-spec-@0');
+  const spec = node
+    ? String(node.dataset.liaResetterSpec || node.dataset.spec || '')
+    : String.raw`@1`;
+  const anchorId = 'regression-ui-@0';
+  let anchor = document.getElementById(anchorId);
+
+  if (!anchor) {
+    anchor = document.createElement('span');
+    anchor.id = anchorId;
+  }
+
+  anchor.hidden = true;
+  anchor.style.display = 'none';
+  anchor.setAttribute('aria-hidden', 'true');
+  anchor.dataset.liaResetterExternal = 'reconstruction';
+  if (anchor.parentNode !== document.body) {
+    document.body.appendChild(anchor);
+  }
+
+  if (node) {
+    node.dataset.spec = spec;
+  }
+
+  if (typeof window.__setupReconstructionQuiz === 'function') {
+    window.__setupReconstructionQuiz('@0', spec);
+    return;
+  }
+
+  if (typeof window.__setupRekonstruktionQuiz === 'function') {
+    window.__setupRekonstruktionQuiz('@0', spec);
+  }
+})();
+</script>
+@end
 
 @Resetter.version
 <script modify="false" run-once>
@@ -1051,7 +1157,7 @@ Ziehe alle drei Punkte auf den Graphen $g(x)=x-1$.
 
 ---
 
-`@Rekonstruktion` vergleicht eine eingestellte Funktion mit dem Zielterm.
+`@ResetterReconstruction` ist der englische Name desselben Resetter-Makros.
 Der Reset öffnet das Quiz erneut und stellt Schar, Regler, Funktionsgraph und
 Boardausschnitt auf die beim Makroaufbau erfassten Werte zurück. Das vorherige
 LiaScript-Skriptergebnis wird ebenfalls geleert, sodass die Aufgabe wieder
@@ -1065,7 +1171,7 @@ vollständig im Ausgangszustand vorliegt.
 
 Stelle die Funktion $f(x)=2x-1$ ein.
 
-@Rekonstruktion(`reset_coord_reconstruction;2x-1;0.1`)
+@ResetterReconstruction(`reset_coord_reconstruction;2x-1;0.1`)
 
 @resetter
 
