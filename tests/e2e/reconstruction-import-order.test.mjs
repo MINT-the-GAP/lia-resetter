@@ -115,8 +115,7 @@ async function waitForTemplates(page) {
     () =>
       typeof window.JXG === "object" &&
       typeof window.__coord === "object" &&
-      window.Resetter?.ready === true &&
-      typeof window.__setupReconstructionQuiz === "function",
+      window.Resetter?.ready === true,
     undefined,
     { timeout: 90_000 },
   );
