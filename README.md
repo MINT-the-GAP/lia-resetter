@@ -5,7 +5,7 @@ language: de
 narrator: Deutsch Female
 edit: true
 comment: Starter-Template mit nativen, Kachel-, Orthographie-, Mathematik-, Marker- und Koordinatenquizzen samt Einzelreset.
-repository: https://github.com/MINT-the-GAP/lia-resetter
+
 
 script: ./dist/index.js
 
